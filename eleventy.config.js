@@ -1,5 +1,6 @@
 export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy({ "src/site/assets": "assets" });
+  eleventyConfig.addWatchTarget("src/**");
 
   return {
     dir: {

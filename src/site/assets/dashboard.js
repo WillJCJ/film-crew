@@ -26,9 +26,20 @@ function renderRatings(ratings) {
 
   return ratings.map((rating) => {
     const item = cloneTemplate("rating-item-tpl");
-    const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}/10`;
-    bind(item, "summary").textContent = `${rating.memberName} · ${ratingLabel}`;
-    bind(item, "review").textContent = rating.review || "No review yet.";
+    const summaryEl = bind(item, "summary");
+    const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}`;
+    summaryEl.textContent = `${rating.memberName} · ${ratingLabel}`;
+    window.filmCrew.applyScoreBandClass(summaryEl, rating.score);
+
+    const reviewEl = bind(item, "review");
+    if (rating.review) {
+      reviewEl.textContent = rating.review;
+      reviewEl.hidden = false;
+    } else {
+      reviewEl.textContent = "";
+      reviewEl.hidden = true;
+    }
+
     return item;
   });
 }
@@ -47,7 +58,9 @@ function renderCurrentScreening(screening) {
     ? `Chosen by ${screening.chooser.name} on ${screening.watchDate}`
     : `Chosen by ${screening.chooser.name}`;
   bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
-  bind(card, "score").textContent = window.filmCrew.formatAverage(screening.averageScore);
+  const scoreEl = bind(card, "score");
+  scoreEl.textContent = window.filmCrew.formatAverage(screening.averageScore);
+  window.filmCrew.applyScoreBandClass(scoreEl, screening.averageScore);
   bind(card, "ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
   bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
 

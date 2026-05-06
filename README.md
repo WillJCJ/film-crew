@@ -37,10 +37,9 @@ DEV_AUTH_EMAIL=me@example.com
 
 When `DEV_AUTH_EMAIL` is set, local `wrangler dev` requests authenticate as that member without Cloudflare One.
 
-5. Build the Eleventy site and start Wrangler.
+5. Start local development with automatic rebuild/reload on source changes.
 
 ```sh
-npm run build
 npm run dev
 ```
 

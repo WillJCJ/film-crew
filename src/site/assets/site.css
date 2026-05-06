@@ -8,6 +8,15 @@
   --accent-deep: #7a2819;
   --accent-soft: #f0c9b3;
   --shadow: 0 24px 80px rgba(40, 27, 20, 0.14);
+  --rating-deep-red: #7a1212;
+  --rating-red: #b11b1b;
+  --rating-orange: #cc5f1d;
+  --rating-light-orange: #e6902f;
+  --rating-yellow-green: #8a9d2f;
+  --rating-light-green: #7bb279;
+  --rating-green: #3e8f3b;
+  --rating-deep-green: #1f6d2d;
+  --rating-gold: #b88700;
 }
 
 * {
@@ -220,6 +229,46 @@ main {
 .rating-item {
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.rating-band-none {
+  color: var(--muted);
+}
+
+.rating-band-deep-red {
+  color: var(--rating-deep-red);
+}
+
+.rating-band-red {
+  color: var(--rating-red);
+}
+
+.rating-band-orange {
+  color: var(--rating-orange);
+}
+
+.rating-band-light-orange {
+  color: var(--rating-light-orange);
+}
+
+.rating-band-yellow-green {
+  color: var(--rating-yellow-green);
+}
+
+.rating-band-light-green {
+  color: var(--rating-light-green);
+}
+
+.rating-band-green {
+  color: var(--rating-green);
+}
+
+.rating-band-deep-green {
+  color: var(--rating-deep-green);
+}
+
+.rating-band-gold {
+  color: var(--rating-gold);
 }
 
 .stack-form,
