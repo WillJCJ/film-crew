@@ -1,6 +1,6 @@
 # Film Crew
 
-[![Deployment](/WillJCJ/film-crew/actions/workflows/deploy.yml/badge.svg)](/WillJCJ/film-crew/actions/workflows/deploy.yml)
+[![Deployment](https://github.com/WillJCJ/film-crew/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/WillJCJ/film-crew/actions/workflows/deploy.yml)
 
 Film Crew is a Cloudflare Worker-backed site for a four-person weekly film
 club. It uses:
