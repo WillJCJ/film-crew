@@ -7,8 +7,9 @@
     "build": "npm run build:site",
     "build:site": "eleventy --config=eleventy.config.js",
     "lint:css": "stylelint \"src/site/assets/**/*.css\"",
-    "lint:html": "htmlhint \"src/site/**/*.html\"",
+    "lint:html": "npm run build:site && htmlhint \"dist/**/*.html\"",
     "lint:js": "eslint src/**/*.js eleventy.config.js",
+    "lint:md": "markdownlint-cli2 README.md AGENTS.md",
     "dev": "concurrently -k -n SITE,WORKER -c yellow,cyan \"npm:dev:site\" \"npm:dev:worker\"",
     "dev:site": "eleventy --config=eleventy.config.js --watch",
     "dev:worker": "wrangler dev",
@@ -26,6 +27,7 @@
     "eslint": "^10.3.0",
     "globals": "^17.6.0",
     "htmlhint": "^1.9.2",
+    "markdownlint-cli2": "^0.22.1",
     "stylelint": "^17.11.0",
     "stylelint-config-standard": "^40.0.0",
     "wrangler": "^4.15.0"

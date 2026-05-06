@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This file defines repository working standards for human contributors and coding agents.
+This file defines repository working standards for human contributors and
+coding agents.
 Follow these rules unless a maintainer explicitly overrides them in a task.
 
 ## Git Branch Standards
@@ -90,9 +91,10 @@ Rules:
 
 ## Worker Tests
 
-Unit tests for every `worker/` module live in `worker/tests/`. When modifying any file
-in `worker/`, update the corresponding test file in `worker/tests/` to reflect the
-change. When adding a new `worker/` module, add a matching test file.
+Unit tests for every `worker/` module live in `worker/tests/`.
+When modifying any file in `worker/`, update the corresponding test file in
+`worker/tests/` to reflect the change.
+When adding a new `worker/` module, add a matching test file.
 
 Run tests with:
 
@@ -106,8 +108,10 @@ npm test
 - Do not use destructive git commands unless explicitly requested.
 - Do not rewrite history on shared branches.
 - If uncertain, document assumptions in the PR description.
-- Don't generate text content leave that to the humands. Just use lorem ipsum or whatever.
-- Before making security-related changes, read `docs/security.md` and follow its identifier and hardening guidance.
+- Don't generate text content leave that to the humands. Just use lorem ipsum
+  or whatever.
+- Before making security-related changes, read `docs/security.md` and follow
+  its identifier and hardening guidance.
 
 ## Coding Choice and Style
 
@@ -118,8 +122,10 @@ Prefer concise and elegant solutions.
 ## Writing Style
 
 - Use direct present-tense wording when describing behaviour.
-- Avoid temporal framing like "now includes", "new feature", or "recently added".
-- Apply the same tone in README text, PR descriptions, comments, and user-facing copy.
+- Avoid temporal framing like "now includes", "new feature", or
+  "recently added".
+- Apply the same tone in README text, PR descriptions, comments, and
+  user-facing copy.
 - Use British English spelling and grammar in all written content.
 - Use 24-hour time format (for example, 17:30, not 5:30 PM).
 - Never use month-first date formats.
