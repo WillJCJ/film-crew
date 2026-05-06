@@ -214,3 +214,30 @@ pageScript: /assets/dashboard.js
   </div>
   <p id="refresh-all-films-message" class="form-message"></p>
 </section>
+
+<template id="member-profile-row-tpl">
+  <form class="member-profile-row">
+    <p class="member-profile-title" data-bind="title"></p>
+    <div class="member-profile-controls">
+      <input name="profileEmoji" required data-bind="emojiInput">
+      <div data-bind="colorPicker"></div>
+      <button class="button secondary" type="submit">Save</button>
+    </div>
+  </form>
+</template>
+
+<template id="rotation-row-tpl">
+  <div class="rotation-row">
+    <span class="rotation-position muted" data-bind="position"></span>
+    <span data-bind="identity"></span>
+    <button class="button secondary compact" type="button" data-bind="upBtn">↑</button>
+    <button class="button secondary compact" type="button" data-bind="downBtn">↓</button>
+  </div>
+</template>
+
+<template id="color-dot-picker-tpl">
+  <div class="color-picker-dot-wrap">
+    <button type="button" class="color-dot" aria-label="Choose profile colour"></button>
+    <input type="color" class="native-color-input" name="profileColor" required>
+  </div>
+</template>

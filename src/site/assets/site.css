@@ -310,6 +310,10 @@ main {
   gap: 4px 12px;
 }
 
+.film-meta > div {
+  display: contents;
+}
+
 .film-meta dt {
   font-weight: 700;
   color: var(--muted);
@@ -317,6 +321,16 @@ main {
 
 .film-meta dd {
   margin: 0;
+}
+
+#refresh-omdb,
+#edit-imdb-form {
+  display: none;
+}
+
+body[data-authed] #refresh-omdb,
+body[data-authed] #edit-imdb-form {
+  display: revert;
 }
 
 .rating-item {
@@ -390,43 +404,43 @@ main {
   text-align: center;
 }
 
-.rating-band-none {
+[data-score-band="none"] {
   color: var(--muted);
 }
 
-.rating-band-deep-red {
+[data-score-band="deep-red"] {
   color: var(--rating-deep-red);
 }
 
-.rating-band-red {
+[data-score-band="red"] {
   color: var(--rating-red);
 }
 
-.rating-band-orange {
+[data-score-band="orange"] {
   color: var(--rating-orange);
 }
 
-.rating-band-light-orange {
+[data-score-band="light-orange"] {
   color: var(--rating-light-orange);
 }
 
-.rating-band-yellow-green {
+[data-score-band="yellow-green"] {
   color: var(--rating-yellow-green);
 }
 
-.rating-band-light-green {
+[data-score-band="light-green"] {
   color: var(--rating-light-green);
 }
 
-.rating-band-green {
+[data-score-band="green"] {
   color: var(--rating-green);
 }
 
-.rating-band-deep-green {
+[data-score-band="deep-green"] {
   color: var(--rating-deep-green);
 }
 
-.rating-band-gold {
+[data-score-band="gold"] {
   background: linear-gradient(
     90deg,
     #c8960c 0%,
