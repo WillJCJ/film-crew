@@ -9,7 +9,11 @@ async function loadHome() {
     ]);
 
     if (screening) {
-      window.filmCrew.replaceChildren(currentTarget, [window.filmCrew.renderScreeningCard(screening)]);
+      const card = window.filmCrew.renderScreeningCard(screening, {
+        titleLinkHref: `/archive/${screening.weekKey}`,
+        posterLinkHref: `/archive/${screening.weekKey}`
+      });
+      window.filmCrew.replaceChildren(currentTarget, [card]);
     } else {
       window.filmCrew.setMutedMessage(currentTarget, "No screenings have been added yet.");
     }
@@ -17,7 +21,11 @@ async function loadHome() {
     if (screenings.length) {
       window.filmCrew.replaceChildren(
         recentTarget,
-        screenings.slice(0, 3).map(window.filmCrew.renderScreeningCard)
+        screenings.slice(0, 3).map((item) => window.filmCrew.renderScreeningCard(item, {
+          showPlot: false,
+          titleLinkHref: `/archive/${item.weekKey}`,
+          posterLinkHref: `/archive/${item.weekKey}`
+        }))
       );
     } else {
       window.filmCrew.setMutedMessage(recentTarget, "The archive is still empty.");

@@ -16,7 +16,6 @@
   --rating-light-green: #7bb279;
   --rating-green: #3e8f3b;
   --rating-deep-green: #1f6d2d;
-  --rating-gold: #b88700;
 }
 
 * {
@@ -91,7 +90,7 @@ a {
 
 /* Auth-state nav visibility — toggled by data-authed on body (set by Worker) */
 .authed-only { display: none; }
-body[data-authed] .authed-only { display: revert; }
+body[data-authed] .authed-only:not(.hidden) { display: revert; }
 body[data-authed] .unauthed-only { display: none; }
 
 main {
@@ -413,18 +412,60 @@ details[open] > .archive-row-summary::before {
 }
 
 #refresh-omdb,
-#edit-imdb-form {
+#detail-rating-form {
   display: none;
 }
 
 body[data-authed] #refresh-omdb,
-body[data-authed] #edit-imdb-form {
+body[data-authed] #detail-rating-form {
   display: revert;
+}
+
+.imdb-inline-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.imdb-inline-holder {
+  display: grid;
+  gap: 6px;
+}
+
+.imdb-inline-display input[type="text"] {
+  width: 14ch;
 }
 
 .rating-item {
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.rating-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.rating-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rating-remove-x {
+  border: none;
+  background: transparent;
+  color: var(--rating-red);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.rating-remove-x:hover {
+  color: var(--rating-deep-red);
 }
 
 .member-identity {

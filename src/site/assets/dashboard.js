@@ -1,7 +1,4 @@
 const dashboardUser = document.querySelector("#dashboard-user");
-const currentScreeningTarget = document.querySelector("#dashboard-current-screening");
-const ratingForm = document.querySelector("#rating-form");
-const ratingMessage = document.querySelector("#rating-message");
 const adminPanel = document.querySelector("#admin-panel");
 const filmSearchForm = document.querySelector("#film-search-form");
 const filmSearchResults = document.querySelector("#film-search-results");
@@ -22,8 +19,6 @@ const screeningDayMessage = document.querySelector("#screening-day-message");
 const rotationList = document.querySelector("#rotation-list");
 const rotationMessage = document.querySelector("#rotation-message");
 
-let currentMember = null;
-let currentScreening = null;
 let rotationData = null;
 
 function cloneTemplate(id) {
@@ -114,71 +109,13 @@ function createColorDotPicker(initialColor = "#3E8F3B") {
   return { wrapper, dotButton, colourInput };
 }
 
-function renderRatings(ratings) {
-  if (!ratings?.length) {
-    return [window.filmCrew.createEl("p", { className: "muted", text: "No ratings submitted yet." })];
-  }
-
-  return ratings.map((rating) => {
-    const item = cloneTemplate("rating-item-tpl");
-    const summaryEl = bind(item, "summary");
-    const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}`;
-    const identity = window.filmCrew.createMemberIdentity({
-      name: rating.memberName,
-      profileColor: rating.memberColor,
-      profileEmoji: rating.memberEmoji
-    });
-    summaryEl.replaceChildren(identity, document.createTextNode(` · ${ratingLabel}`));
-    window.filmCrew.applyScoreBandClass(summaryEl, rating.score);
-
-    const reviewEl = bind(item, "review");
-    if (rating.review) {
-      reviewEl.textContent = rating.review;
-      reviewEl.hidden = false;
-    } else {
-      reviewEl.textContent = "";
-      reviewEl.hidden = true;
-    }
-
-    return item;
-  });
-}
-
-function renderCurrentScreening(screening) {
-  if (!screening) {
-    window.filmCrew.setMutedMessage(currentScreeningTarget, "No screenings yet. Add one below if you are the admin.");
-    ratingForm.classList.add("hidden");
-    return;
-  }
-
-  const card = cloneTemplate("current-screening-tpl");
-  bind(card, "weekKey").textContent = screening.weekKey;
-  bind(card, "title").textContent = screening.film.title;
-  window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening);
-  bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
-  const scoreEl = bind(card, "score");
-  scoreEl.textContent = window.filmCrew.formatAverage(screening.averageScore);
-  window.filmCrew.applyScoreBandClass(scoreEl, screening.averageScore);
-  bind(card, "ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
-  bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
-
-  currentScreeningTarget.replaceChildren(card);
-  ratingForm.classList.remove("hidden");
-  const existing = screening.ratings.find((rating) => rating.memberName === currentMember.displayName);
-  ratingForm.elements.score.value = existing?.score ?? "";
-  ratingForm.elements.review.value = existing?.review || "";
-}
-
 async function loadDashboard() {
   try {
-    const [{ member }, { screening }, fetchedRotation] = await Promise.all([
+    const [{ member }, fetchedRotation] = await Promise.all([
       window.filmCrew.fetchJson("/api/me"),
-      window.filmCrew.fetchJson("/api/screenings/current"),
       window.filmCrew.fetchJson("/api/rotation").catch(() => null)
     ]);
 
-    currentMember = member;
-    currentScreening = screening;
     rotationData = fetchedRotation;
     dashboardUser.replaceChildren(
       document.createTextNode("Signed in as "),
@@ -189,7 +126,6 @@ async function loadDashboard() {
       }),
       document.createTextNode(".")
     );
-    renderCurrentScreening(screening);
     hydrateProfileForm(member);
     renderNextPickPanel(rotationData);
     hydrateScreeningDayForm(rotationData);
@@ -217,8 +153,6 @@ async function loadDashboard() {
       attrs: { href: "/login/" }
     });
     dashboardUser.replaceChildren(document.createTextNode("You are not authenticated. "), loginLink, document.createTextNode("."));
-    window.filmCrew.replaceChildren(currentScreeningTarget, []);
-    ratingForm.classList.add("hidden");
   }
 }
 
@@ -296,7 +230,6 @@ profileForm?.addEventListener("submit", async (event) => {
       })
     });
 
-    currentMember = member;
     hydrateProfileForm(member);
     profileMessage.textContent = "Profile updated.";
     await loadDashboard();
@@ -337,36 +270,6 @@ adminProfilesList?.addEventListener("submit", async (event) => {
 
 profileForm?.elements.profileEmoji?.addEventListener("input", (event) => {
   validateEmojiInput(event.target);
-});
-
-ratingForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!currentScreening) {
-    return;
-  }
-
-  const rawValue = ratingForm.elements.score.value.trim();
-  const numericValue = Number(rawValue);
-  if (!rawValue || isNaN(numericValue) || numericValue < 1) {
-    ratingMessage.textContent = "Enter a score of 1 or above (decimals allowed).";
-    return;
-  }
-
-  ratingMessage.textContent = "Saving…";
-  try {
-    const payload = await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.weekKey}/ratings`, {
-      method: "POST",
-      body: JSON.stringify({
-        score: numericValue,
-        review: ratingForm.elements.review.value
-      })
-    });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
-    ratingMessage.textContent = "Rating saved.";
-  } catch (error) {
-    ratingMessage.textContent = error.message;
-  }
 });
 
 filmSearchForm?.addEventListener("submit", async (event) => {
@@ -431,11 +334,10 @@ createScreeningForm?.addEventListener("submit", async (event) => {
         notes: createScreeningForm.elements.notes.value
       })
     });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
+    const { screening } = payload;
     createScreeningForm.reset();
     createScreeningForm.classList.add("hidden");
-    createScreeningMessage.textContent = "Screening created.";
+    createScreeningMessage.textContent = `Screening created for ${screening.weekKey}.`;
   } catch (error) {
     createScreeningMessage.textContent = error.message;
   }
@@ -645,12 +547,11 @@ myPickForm?.addEventListener("submit", async (event) => {
         notes: myPickForm.elements.notes.value.trim() || undefined
       })
     });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
+    const { screening } = payload;
     myPickForm.reset();
     myPickForm.classList.add("hidden");
     myPickPanel.classList.add("hidden");
-    if (myPickMessage) myPickMessage.textContent = "Pick submitted.";
+    if (myPickMessage) myPickMessage.textContent = `Pick submitted for ${screening.weekKey}.`;
   } catch (error) {
     if (myPickMessage) myPickMessage.textContent = error.message;
   }

@@ -124,7 +124,7 @@ function renderChooserLine(target, screening) {
 }
 
 function renderScreeningCard(screening, options = {}) {
-  const { showPlot = true } = options;
+  const { showPlot = true, titleLinkHref = null, posterLinkHref = null } = options;
   const tpl = document.getElementById("screening-card-tpl");
   const card = tpl.content.cloneNode(true).firstElementChild;
 
@@ -135,10 +135,31 @@ function renderScreeningCard(screening, options = {}) {
     poster.src = screening.film.posterUrl;
     poster.alt = `${screening.film.title} poster`;
     poster.hidden = false;
+
+    if (posterLinkHref) {
+      const posterLink = createEl("a", {
+        attrs: {
+          href: posterLinkHref,
+          "aria-label": `Open details for ${screening.film.title}`
+        }
+      });
+      posterLink.appendChild(poster);
+      card.prepend(posterLink);
+    }
   }
 
   bind("weekKey").textContent = screening.weekKey;
-  bind("title").textContent = screening.film.title;
+  const titleEl = bind("title");
+  if (titleLinkHref) {
+    const titleLink = createEl("a", {
+      className: "text-link",
+      text: screening.film.title,
+      attrs: { href: titleLinkHref }
+    });
+    titleEl.replaceChildren(titleLink);
+  } else {
+    titleEl.textContent = screening.film.title;
+  }
   bind("yearGroup").textContent = `(${screening.film.year || "Unknown year"})`;
   renderChooserLine(bind("chooserLine"), screening);
   const plotEl = bind("plot");
@@ -157,6 +178,15 @@ function renderScreeningCard(screening, options = {}) {
   return card;
 }
 
+async function initAuthState() {
+  try {
+    await fetchJson("/api/me");
+    document.body.setAttribute("data-authed", "");
+  } catch {
+    document.body.removeAttribute("data-authed");
+  }
+}
+
 window.filmCrew = {
   createEl,
   fetchJson,
@@ -169,3 +199,7 @@ window.filmCrew = {
   replaceChildren,
   setMutedMessage
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+  initAuthState();
+});

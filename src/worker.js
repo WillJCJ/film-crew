@@ -8,6 +8,7 @@ import { handleUpdateOwnProfile, handleAdminUpdateMemberProfile } from "./handle
 import {
   handleCreateScreening,
   handlePickerCreateScreening,
+  handleDeleteOwnRating,
   handleUpsertRating,
   handleUpdateScreeningFilm
 } from "./handlers/screenings.js";
@@ -91,6 +92,11 @@ app.get("/api/screenings/:weekKey", async (c) => {
 app.post("/api/screenings/:weekKey/ratings", async (c) => {
   const member = await extractMemberFromAuth(c.req.raw, c.env);
   return handleUpsertRating(c.req.raw, c.env, member, c.req.param("weekKey"));
+});
+
+app.delete("/api/screenings/:weekKey/ratings", async (c) => {
+  const member = await extractMemberFromAuth(c.req.raw, c.env);
+  return handleDeleteOwnRating(c.env, member, c.req.param("weekKey"));
 });
 
 app.get("/api/films/:imdbId/omdb", async (c) => {

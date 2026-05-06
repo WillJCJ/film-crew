@@ -14,30 +14,6 @@ pageScript: /assets/dashboard.js
   <div id="dashboard-user" class="status-strip">Authenticating with Cloudflare One…</div>
 </section>
 
-<section class="panel two-column">
-  <div>
-    <p class="eyebrow">Current Week</p>
-    <div id="dashboard-current-screening">
-      <p class="muted">Loading current screening…</p>
-    </div>
-  </div>
-  <div>
-    <p class="eyebrow">Your Rating</p>
-    <form id="rating-form" class="stack-form hidden">
-      <label>
-        <span>Score</span>
-        <input type="text" name="score" inputmode="decimal" placeholder="e.g. 7.5">
-      </label>
-      <label>
-        <span>Review</span>
-        <textarea name="review" rows="5" placeholder="Short reaction, favorite scene, or whether the pick was chaos."></textarea>
-      </label>
-      <button class="button primary" type="submit">Save rating</button>
-      <p id="rating-message" class="form-message"></p>
-    </form>
-  </div>
-</section>
-
 <section class="panel">
   <div class="section-heading">
     <div>
@@ -119,24 +95,6 @@ pageScript: /assets/dashboard.js
   </form>
   <p id="profile-message" class="form-message"></p>
 </section>
-
-<template id="current-screening-tpl">
-  <article class="detail-card">
-    <p class="eyebrow" data-bind="weekKey"></p>
-    <h2 data-bind="title"></h2>
-    <p class="muted" data-bind="chooserLine"></p>
-    <p data-bind="plot"></p>
-    <p><strong data-bind="score"></strong><span data-bind="ratingCount"></span></p>
-    <div class="rating-list" data-bind="ratings"></div>
-  </article>
-</template>
-
-<template id="rating-item-tpl">
-  <article class="rating-item">
-    <strong data-bind="summary"></strong>
-    <p data-bind="review"></p>
-  </article>
-</template>
 
 <template id="film-search-card-tpl">
   <article class="card">

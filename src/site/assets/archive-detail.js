@@ -1,10 +1,9 @@
 const contentTarget = document.querySelector("#archive-detail-content");
-const titleTarget = document.querySelector("#detail-title");
 const refreshButton = document.querySelector("#refresh-omdb");
-const editImdbForm = document.querySelector("#edit-imdb-form");
-const editImdbInput = document.querySelector("#edit-imdb-id");
-const editImdbMessage = document.querySelector("#edit-imdb-message");
+const detailRatingForm = document.querySelector("#detail-rating-form");
+const detailRatingMessage = document.querySelector("#detail-rating-message");
 let currentScreening = null;
+let currentMemberName = null;
 
 function cloneTemplate(id) {
   return document.getElementById(id).content.cloneNode(true).firstElementChild;
@@ -29,12 +28,59 @@ function renderFilmMeta(screening) {
     rows.push(row);
   };
 
-  if (film.imdbId) {
-    const link = window.filmCrew.createEl("a", {
-      text: film.imdbId,
-      attrs: { href: `https://www.imdb.com/title/${film.imdbId}/`, target: "_blank", rel: "noopener noreferrer" }
+  {
+    const display = window.filmCrew.createEl("div", { className: "imdb-inline-display" });
+    display.dataset.role = "imdb-inline";
+    if (film.imdbId) {
+      const link = window.filmCrew.createEl("a", {
+        text: film.imdbId,
+        attrs: {
+          href: `https://www.imdb.com/title/${film.imdbId}/`,
+          target: "_blank",
+          rel: "noopener noreferrer",
+          "data-role": "imdb-link"
+        }
+      });
+      display.appendChild(link);
+    } else {
+      display.appendChild(window.filmCrew.createEl("span", {
+        className: "muted",
+        text: "Not set",
+        attrs: { "data-role": "imdb-link" }
+      }));
+    }
+
+    const inlineInput = window.filmCrew.createEl("input", {
+      className: "hidden",
+      attrs: {
+        type: "text",
+        name: "imdbId",
+        placeholder: "tt1234567",
+        value: film.imdbId || "",
+        "data-role": "imdb-input"
+      }
     });
-    pushRow("IMDb ID", link);
+    display.appendChild(inlineInput);
+
+    const editBtn = window.filmCrew.createEl("button", {
+      className: "button secondary compact authed-only",
+      text: "Edit",
+      attrs: {
+        type: "button",
+        "data-action": "toggle-imdb-edit",
+        "data-mode": "edit",
+        "aria-label": "Edit IMDb ID"
+      }
+    });
+    display.appendChild(editBtn);
+
+    const message = window.filmCrew.createEl("p", {
+      className: "form-message",
+      attrs: { "data-role": "imdb-inline-message" }
+    });
+    const holder = window.filmCrew.createEl("div", { className: "imdb-inline-holder" });
+    holder.replaceChildren(display, message);
+    pushRow("IMDb ID", holder);
   }
 
   const pushText = (label, value) => {
@@ -82,6 +128,13 @@ function renderRatings(ratings) {
       reviewEl.hidden = true;
     }
 
+    if (currentMemberName && rating.memberName === currentMemberName) {
+      const actionsEl = bind(item, "actions");
+      if (actionsEl) {
+        actionsEl.classList.remove("hidden");
+      }
+    }
+
     return item;
   });
 }
@@ -101,7 +154,13 @@ async function loadArchiveDetail() {
   try {
     const { screening } = await window.filmCrew.fetchJson(`/api/screenings/${weekKey}`);
     currentScreening = screening;
-    titleTarget.textContent = `${screening.weekKey} detail`;
+    currentMemberName = null;
+    try {
+      const { member } = await window.filmCrew.fetchJson("/api/me");
+      currentMemberName = member.displayName;
+    } catch {
+      // Not authenticated.
+    }
 
     const card = cloneTemplate("archive-detail-tpl");
     bind(card, "weekKey").textContent = screening.weekKey;
@@ -145,8 +204,14 @@ async function loadArchiveDetail() {
     bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
     window.filmCrew.replaceChildren(contentTarget, [card]);
 
-    if (editImdbInput) {
-      editImdbInput.value = screening.film.imdbId || "";
+    if (detailRatingForm) {
+      detailRatingForm.elements.score.value = "";
+      detailRatingForm.elements.review.value = "";
+      if (currentMemberName) {
+        const existing = screening.ratings.find((rating) => rating.memberName === currentMemberName);
+        detailRatingForm.elements.score.value = existing?.score ?? "";
+        detailRatingForm.elements.review.value = existing?.review || "";
+      }
     }
   } catch (error) {
     window.filmCrew.setMutedMessage(contentTarget, error.message || "Could not load screening detail.");
@@ -176,23 +241,144 @@ refreshButton?.addEventListener("click", async () => {
   }
 });
 
-editImdbForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!currentScreening) return;
+contentTarget?.addEventListener("click", async (event) => {
+  const promptRemoveButton = event.target.closest('button[data-action="prompt-remove-rating"]');
+  if (promptRemoveButton) {
+    const actionsEl = promptRemoveButton.closest('[data-bind="actions"]') || promptRemoveButton.parentElement;
+    const confirmButton = actionsEl?.querySelector('button[data-action="confirm-remove-rating"]');
+    if (confirmButton) {
+      confirmButton.classList.remove("hidden");
+      confirmButton.focus();
+    }
+    return;
+  }
 
-  const imdbId = editImdbInput.value.trim();
-  editImdbMessage.textContent = "Saving…";
+  const confirmRemoveButton = event.target.closest('button[data-action="confirm-remove-rating"]');
+  if (confirmRemoveButton) {
+    if (!currentScreening) {
+      return;
+    }
 
-  try {
-    await window.filmCrew.fetchJson(`/api/admin/screenings/${currentScreening.weekKey}/film`, {
+    detailRatingMessage.textContent = "Removing…";
+    confirmRemoveButton.disabled = true;
+    try {
+      await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.weekKey}/ratings`, {
+        method: "DELETE"
+      });
+      await loadArchiveDetail();
+      detailRatingMessage.textContent = "Rating removed.";
+    } catch (error) {
+      detailRatingMessage.textContent = error.message;
+      confirmRemoveButton.disabled = false;
+    }
+    return;
+  }
+
+  const editButton = event.target.closest('button[data-action="toggle-imdb-edit"]');
+  if (editButton) {
+    const valueCell = editButton.closest("dd");
+    const inlineRoot = valueCell?.querySelector('[data-role="imdb-inline"]');
+    const inlineInput = inlineRoot?.querySelector('[data-role="imdb-input"]');
+    const inlineLink = inlineRoot?.querySelector('[data-role="imdb-link"]');
+    const message = valueCell?.querySelector('[data-role="imdb-inline-message"]');
+    const mode = editButton.dataset.mode || "edit";
+
+    if (!inlineRoot || !inlineInput || !inlineLink) {
+      return;
+    }
+
+    if (mode === "edit") {
+      inlineLink.classList.add("hidden");
+      inlineInput.classList.remove("hidden");
+      editButton.textContent = "Save";
+      editButton.dataset.mode = "save";
+      inlineInput.focus();
+      inlineInput.select();
+      return;
+    }
+
+    const imdbId = inlineInput.value.trim();
+    if (!/^tt\d+$/i.test(imdbId)) {
+      if (message) {
+        message.textContent = "IMDb ID must look like tt1234567.";
+      }
+      return;
+    }
+
+    if (!currentScreening) {
+      return;
+    }
+
+    editButton.disabled = true;
+  if (message) {
+    message.textContent = "Saving…";
+  }
+
+    window.filmCrew.fetchJson(`/api/admin/screenings/${currentScreening.weekKey}/film`, {
       method: "PATCH",
       body: JSON.stringify({ imdbId })
+    }).then(async () => {
+      await loadArchiveDetail();
+    }).catch((err) => {
+      if (message) {
+        message.textContent = err.message || "Could not update IMDb ID.";
+      }
+      editButton.disabled = false;
     });
-    editImdbMessage.textContent = "Saved. Reloading…";
+  }
+});
+
+contentTarget?.addEventListener("keydown", (event) => {
+  const inlineInput = event.target.closest('[data-role="imdb-input"]');
+  if (!inlineInput) {
+    return;
+  }
+  if (event.key === "Escape") {
+    const inlineRoot = inlineInput.closest('[data-role="imdb-inline"]');
+    const editButton = inlineRoot?.querySelector('button[data-action="toggle-imdb-edit"]');
+    const inlineLink = inlineRoot?.querySelector('[data-role="imdb-link"]');
+    const message = inlineRoot?.closest("dd")?.querySelector('[data-role="imdb-inline-message"]');
+    if (inlineLink && editButton) {
+      inlineInput.classList.add("hidden");
+      inlineLink.classList.remove("hidden");
+      editButton.textContent = "Edit";
+      editButton.dataset.mode = "edit";
+      if (currentScreening?.film?.imdbId) {
+        inlineInput.value = currentScreening.film.imdbId;
+      }
+      if (message) {
+        message.textContent = "";
+      }
+    }
+  }
+});
+
+detailRatingForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!currentScreening) {
+    return;
+  }
+
+  const rawValue = detailRatingForm.elements.score.value.trim();
+  const numericValue = Number(rawValue);
+  if (!rawValue || isNaN(numericValue) || numericValue < 1) {
+    detailRatingMessage.textContent = "Enter a score of 1 or above (decimals allowed).";
+    return;
+  }
+
+  detailRatingMessage.textContent = "Saving…";
+  try {
+    await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.weekKey}/ratings`, {
+      method: "POST",
+      body: JSON.stringify({
+        score: numericValue,
+        review: detailRatingForm.elements.review.value
+      })
+    });
     await loadArchiveDetail();
-    editImdbMessage.textContent = "";
-  } catch (err) {
-    editImdbMessage.textContent = err.message || "Could not update IMDb ID.";
+    detailRatingMessage.textContent = "Rating saved.";
+  } catch (error) {
+    detailRatingMessage.textContent = error.message;
   }
 });
 
