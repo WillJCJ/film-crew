@@ -20,7 +20,7 @@ export default [
     }
   },
   {
-    files: ["eleventy.config.js"],
+    files: ["eleventy.config.js", "worker/tests/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.node
