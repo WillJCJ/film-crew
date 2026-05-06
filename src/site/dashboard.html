@@ -1,0 +1,75 @@
+---
+permalink: /dashboard/index.html
+layout: layouts/base.liquid
+title: Dashboard | Film Crew
+pageScript: /assets/dashboard.js
+---
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Dashboard</p>
+      <h1>Your member view</h1>
+    </div>
+  </div>
+  <div id="dashboard-user" class="status-strip">Authenticating with Cloudflare One…</div>
+</section>
+
+<section class="panel two-column">
+  <div>
+    <p class="eyebrow">Current Week</p>
+    <div id="dashboard-current-screening">
+      <p class="muted">Loading current screening…</p>
+    </div>
+  </div>
+  <div>
+    <p class="eyebrow">Your Rating</p>
+    <form id="rating-form" class="stack-form hidden">
+      <label>
+        <span>Score</span>
+        <input type="number" name="score" min="1" max="10" required>
+      </label>
+      <label>
+        <span>Review</span>
+        <textarea name="review" rows="5" placeholder="Short reaction, favorite scene, or whether the pick was chaos."></textarea>
+      </label>
+      <button class="button primary" type="submit">Save rating</button>
+      <p id="rating-message" class="form-message"></p>
+    </form>
+  </div>
+</section>
+
+<section id="admin-panel" class="panel hidden">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Admin</p>
+      <h2>Create a screening</h2>
+    </div>
+  </div>
+
+  <form id="film-search-form" class="inline-form">
+    <label class="grow">
+      <span>Search OMDb</span>
+      <input type="search" name="query" placeholder="Search by film title" required>
+    </label>
+    <button class="button secondary" type="submit">Search</button>
+  </form>
+  <div id="film-search-results" class="cards-grid compact"></div>
+
+  <form id="create-screening-form" class="stack-form hidden">
+    <input type="hidden" name="imdbId">
+    <label>
+      <span>Watch date</span>
+      <input type="date" name="watchDate" required>
+    </label>
+    <label>
+      <span>Chooser</span>
+      <select name="chooserMemberId" required></select>
+    </label>
+    <label>
+      <span>Notes</span>
+      <textarea name="notes" rows="4" placeholder="Optional context for the week."></textarea>
+    </label>
+    <button class="button primary" type="submit">Create screening</button>
+    <p id="create-screening-message" class="form-message"></p>
+  </form>
+</section>

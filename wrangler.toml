@@ -1,0 +1,26 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "film-crew"
+main = "src/worker.js"
+compatibility_date = "2026-05-06"
+
+# Cloudflare One protects /archive/* and /dashboard/* routes.
+# Configure access policies in the Cloudflare dashboard under Zero Trust > Access.
+# The cf-access-jwt-assertion header will be present for authenticated requests.
+
+[dev]
+port = 9898
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "404-page"
+run_worker_first = ["/api/*", "/auth/*"]
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "film-crew"
+database_id = "52d527f7-60aa-4b53-b17d-f3bfcfc93795"
+migrations_dir = "migrations"

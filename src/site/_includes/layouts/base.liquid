@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title | default: "Film Crew" }}</title>
+    <meta name="description" content="Track weekly film picks, ratings, and the running history for your crew.">
+    <link rel="stylesheet" href="/assets/site.css">
+    <script defer src="/assets/app.js"></script>
+    {% if pageScript %}
+    <script defer src="{{ pageScript }}"></script>
+    {% endif %}
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div>
+          <a class="brand" href="/">Film Crew</a>
+          <p class="tagline">Weekly picks, scorecards, and a proper archive.</p>
+        </div>
+        <nav id="site-nav" class="site-nav" aria-label="Main navigation">
+          <a href="/">Home</a>
+          <a href="/login/">Login</a>
+        </nav>
+      </header>
+
+      <main>
+        {{ content }}
+      </main>
+    </div>
+  </body>
+  </html>

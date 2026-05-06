@@ -1,0 +1,38 @@
+---
+permalink: /setup/index.html
+layout: layouts/base.liquid
+title: Setup | Film Crew
+pageScript: /assets/setup.js
+---
+<section class="panel">
+  <p class="eyebrow">Initial Setup</p>
+  <h1>Create the four member accounts</h1>
+  <p class="muted">This page only works before any members exist in the database. Mark one person as the admin who can add weekly screenings.</p>
+  <form id="setup-form" class="setup-grid">
+    {% for slot in (1..4) %}
+    <fieldset>
+      <legend>Member {{ slot }}</legend>
+      <label>
+        <span>Display name</span>
+        <input type="text" name="displayName{{ slot }}" required>
+      </label>
+      <label>
+        <span>Username</span>
+        <input type="text" name="username{{ slot }}" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password{{ slot }}" minlength="8" required>
+      </label>
+      <label class="checkbox-row">
+        <input type="radio" name="adminSlot" value="{{ slot }}" {% if slot == 1 %}checked{% endif %}>
+        <span>Admin account</span>
+      </label>
+    </fieldset>
+    {% endfor %}
+    <div class="setup-actions">
+      <button class="button primary" type="submit">Create members</button>
+      <p id="setup-message" class="form-message"></p>
+    </div>
+  </form>
+</section>
