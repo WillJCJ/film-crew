@@ -12,7 +12,7 @@ export default [
     }
   },
   {
-    files: ["src/worker.js"],
+    files: ["src/worker.js", "src/lib/**/*.js", "src/handlers/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.serviceworker
