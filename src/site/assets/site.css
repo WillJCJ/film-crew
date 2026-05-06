@@ -683,6 +683,17 @@ fieldset {
   flex-shrink: 0;
 }
 
+.schedule-add-btn {
+  background: var(--rating-orange);
+  border-color: var(--rating-orange);
+  color: #fff8f2;
+}
+
+.schedule-add-btn:hover {
+  background: var(--rating-light-orange);
+  border-color: var(--rating-light-orange);
+}
+
 @media (width <= 820px) {
   .site-header,
   .section-heading,

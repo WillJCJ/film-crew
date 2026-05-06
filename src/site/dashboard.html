@@ -17,45 +17,38 @@ pageScript: /assets/dashboard.js
 <section class="panel">
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Upcoming</p>
-      <h2>Next pick</h2>
-    </div>
-  </div>
-  <div id="next-pick-content">
-    <p class="muted">Loading…</p>
-  </div>
-  <form id="screening-day-form" class="inline-form">
-    <label>
-      <span>Screening day</span>
-      <select name="day">
-        <option value="0">Sunday</option>
-        <option value="1">Monday</option>
-        <option value="2">Tuesday</option>
-        <option value="3">Wednesday</option>
-        <option value="4">Thursday</option>
-        <option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
-    </label>
-    <button class="button secondary" type="submit">Save</button>
-    <p id="screening-day-message" class="form-message"></p>
-  </form>
-</section>
-
-<section class="panel">
-  <div class="section-heading">
-    <div>
       <p class="eyebrow">Schedule</p>
       <h2>Future screenings</h2>
-    </div>
-    <div class="section-actions">
-      <button id="add-schedule-slot-btn" class="button secondary">Add suggested</button>
     </div>
   </div>
   <div id="schedule-list">
     <p class="muted">Loading…</p>
   </div>
   <p id="schedule-message" class="form-message"></p>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Profile</p>
+      <h2>Your display style</h2>
+    </div>
+  </div>
+  <form id="profile-form" class="inline-form">
+    <label>
+      <span>Emoji</span>
+      <input type="text" name="profileEmoji" required>
+    </label>
+    <label>
+      <span>Colour</span>
+      <div class="color-picker-dot-wrap">
+        <button type="button" class="color-dot" data-color-dot="self" aria-label="Choose profile colour"></button>
+        <input type="color" class="native-color-input" name="profileColor" required>
+      </div>
+    </label>
+    <button class="button primary" type="submit">Save profile</button>
+  </form>
+  <p id="profile-message" class="form-message"></p>
 </section>
 
 <section id="my-pick-panel" class="panel hidden">
@@ -86,30 +79,6 @@ pageScript: /assets/dashboard.js
     <button class="button primary" type="submit">Confirm pick</button>
     <p id="my-pick-message" class="form-message"></p>
   </form>
-</section>
-
-<section class="panel">
-  <div class="section-heading">
-    <div>
-      <p class="eyebrow">Profile</p>
-      <h2>Your display style</h2>
-    </div>
-  </div>
-  <form id="profile-form" class="inline-form">
-    <label>
-      <span>Emoji</span>
-      <input type="text" name="profileEmoji" required>
-    </label>
-    <label>
-      <span>Colour</span>
-      <div class="color-picker-dot-wrap">
-        <button type="button" class="color-dot" data-color-dot="self" aria-label="Choose profile colour"></button>
-        <input type="color" class="native-color-input" name="profileColor" required>
-      </div>
-    </label>
-    <button class="button primary" type="submit">Save profile</button>
-  </form>
-  <p id="profile-message" class="form-message"></p>
 </section>
 
 <template id="film-search-card-tpl">

@@ -8,14 +8,11 @@ const profileForm = document.querySelector("#profile-form");
 const profileMessage = document.querySelector("#profile-message");
 const adminProfilesList = document.querySelector("#admin-profiles-list");
 const adminProfilesMessage = document.querySelector("#admin-profiles-message");
-const nextPickContent = document.querySelector("#next-pick-content");
 const myPickPanel = document.querySelector("#my-pick-panel");
 const myPickFilmSearchForm = document.querySelector("#my-pick-film-search-form");
 const myPickFilmSearchResults = document.querySelector("#my-pick-film-search-results");
 const myPickForm = document.querySelector("#my-pick-form");
 const myPickMessage = document.querySelector("#my-pick-message");
-const screeningDayForm = document.querySelector("#screening-day-form");
-const screeningDayMessage = document.querySelector("#screening-day-message");
 const rotationList = document.querySelector("#rotation-list");
 const rotationMessage = document.querySelector("#rotation-message");
 
@@ -127,8 +124,6 @@ async function loadDashboard() {
       document.createTextNode(".")
     );
     hydrateProfileForm(member);
-    renderNextPickPanel(rotationData);
-    hydrateScreeningDayForm(rotationData);
     await loadSchedule();
 
     if (rotationData?.nextPicker?.displayName === member.displayName) {
@@ -363,40 +358,6 @@ function initRefreshAllFilmsButton() {
   });
 }
 
-function renderNextPickPanel(data) {
-  if (!nextPickContent) return;
-  if (!data?.rotation?.length) {
-    window.filmCrew.setMutedMessage(nextPickContent, "Rotation not set up yet.");
-    return;
-  }
-
-  const { nextPicker, nextScreeningDate } = data;
-  if (!nextPicker) {
-    window.filmCrew.setMutedMessage(nextPickContent, "Could not determine next picker.");
-    return;
-  }
-
-  const formattedDate = new Date(nextScreeningDate + "T00:00:00Z").toLocaleDateString("en-GB", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC"
-  });
-
-  const identity = window.filmCrew.createMemberIdentity({
-    name: nextPicker.displayName,
-    profileColor: nextPicker.profileColor,
-    profileEmoji: nextPicker.profileEmoji
-  });
-
-  const pickerLine = window.filmCrew.createEl("p");
-  pickerLine.replaceChildren(identity, document.createTextNode(" picks next."));
-  const dateLine = window.filmCrew.createEl("p", { className: "muted", text: `Scheduled for ${formattedDate}.` });
-  nextPickContent.replaceChildren(pickerLine, dateLine);
-}
-
-function hydrateScreeningDayForm(data) {
-  if (!screeningDayForm) return;
-  screeningDayForm.elements.day.value = String(data?.screeningDayOfWeek ?? 4);
-}
-
 function updateCreateScreeningDefaults(data) {
   if (!createScreeningForm) return;
   if (data?.nextScreeningDate) {
@@ -468,8 +429,8 @@ async function renderRotationAdmin() {
         });
         if (rotationMessage) rotationMessage.textContent = "Rotation saved.";
         rotationData = await window.filmCrew.fetchJson("/api/rotation").catch(() => null);
-        renderNextPickPanel(rotationData);
         updateCreateScreeningDefaults(rotationData);
+        await loadSchedule();
       } catch (err) {
         if (rotationMessage) rotationMessage.textContent = err.message || "Could not save rotation.";
       } finally {
@@ -478,24 +439,6 @@ async function renderRotationAdmin() {
     });
   }
 }
-
-screeningDayForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const day = Number(screeningDayForm.elements.day.value);
-  if (screeningDayMessage) screeningDayMessage.textContent = "Saving…";
-  try {
-    await window.filmCrew.fetchJson("/api/settings/screening-day", {
-      method: "PUT",
-      body: JSON.stringify({ day })
-    });
-    rotationData = await window.filmCrew.fetchJson("/api/rotation").catch(() => null);
-    renderNextPickPanel(rotationData);
-    updateCreateScreeningDefaults(rotationData);
-    if (screeningDayMessage) screeningDayMessage.textContent = "Saved.";
-  } catch (err) {
-    if (screeningDayMessage) screeningDayMessage.textContent = err.message || "Could not save.";
-  }
-});
 
 myPickFilmSearchForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -564,9 +507,9 @@ loadDashboard();
 
 const scheduleList = document.querySelector("#schedule-list");
 const scheduleMessage = document.querySelector("#schedule-message");
-const addScheduleSlotBtn = document.querySelector("#add-schedule-slot-btn");
 
 let scheduleData = null; // { slots, rotation, latestDate, latestPickerName }
+let suggestedSlot = null;
 
 function suggestNextThursday(fromDateStr) {
   const date = new Date(`${fromDateStr}T00:00:00Z`);
@@ -593,22 +536,84 @@ function buildPickerOptions(rotation, selectedName) {
   return options;
 }
 
-function renderScheduleRows(slots, rotation) {
+function computeSuggestedSlot(data, existingSlots) {
+  const rotation = data?.rotation ?? [];
+  if (!rotation.length) {
+    return null;
+  }
+
+  let lastDate = data?.latestDate || null;
+  let lastPicker = data?.latestPickerName || null;
+
+  for (const slot of existingSlots) {
+    if (slot.watchDate && (!lastDate || slot.watchDate > lastDate)) {
+      lastDate = slot.watchDate;
+      lastPicker = slot.pickerDisplayName || lastPicker;
+    }
+  }
+
+  if (!lastDate) {
+    lastDate = new Date().toISOString().slice(0, 10);
+  }
+
+  const nextDate = suggestNextThursday(lastDate);
+  const lastIdx = lastPicker ? rotation.findIndex((m) => m.displayName === lastPicker) : -1;
+  const nextPicker = rotation[(lastIdx + 1) % rotation.length];
+
+  return {
+    weekKey: null,
+    watchDate: nextDate,
+    pickerDisplayName: nextPicker?.displayName || rotation[0].displayName,
+    isSuggested: true
+  };
+}
+
+function renderScheduleRows(slots, rotation, suggestion) {
   if (!scheduleList) return;
-  if (!slots.length) {
+  const allRows = [...slots];
+  if (suggestion) {
+    allRows.push(suggestion);
+  }
+
+  if (!allRows.length) {
     window.filmCrew.setMutedMessage(scheduleList, "No upcoming screenings scheduled.");
     return;
   }
 
-  const rows = slots.map((slot) => {
+  const rows = allRows.map((slot) => {
     const row = cloneTemplate("schedule-row-tpl");
-    row.dataset.weekKey = slot.weekKey;
+    if (slot.weekKey) {
+      row.dataset.weekKey = slot.weekKey;
+    }
+    if (slot.isSuggested) {
+      row.dataset.suggested = "true";
+    }
 
     const dateInput = row.querySelector(".schedule-date-input");
     dateInput.value = slot.watchDate;
 
     const pickerSelect = row.querySelector(".schedule-picker-select");
     pickerSelect.replaceChildren(...buildPickerOptions(rotation, slot.pickerDisplayName));
+
+    const actionBtn = row.querySelector("[data-action]");
+    if (slot.isSuggested) {
+      actionBtn.dataset.action = "add-slot";
+      actionBtn.textContent = "Add";
+      actionBtn.classList.remove("secondary");
+      actionBtn.classList.add("primary", "schedule-add-btn");
+    } else {
+      const initialDate = slot.watchDate || "";
+      const initialPicker = slot.pickerDisplayName || pickerSelect.value || "";
+
+      const updateSaveVisibility = () => {
+        const isDirty = dateInput.value !== initialDate || pickerSelect.value !== initialPicker;
+        actionBtn.classList.toggle("hidden", !isDirty);
+      };
+
+      actionBtn.classList.add("hidden");
+      dateInput.addEventListener("input", updateSaveVisibility);
+      pickerSelect.addEventListener("change", updateSaveVisibility);
+    }
 
     return row;
   });
@@ -620,7 +625,8 @@ async function loadSchedule() {
   if (!scheduleList) return;
   try {
     scheduleData = await window.filmCrew.fetchJson("/api/schedule");
-    renderScheduleRows(scheduleData.slots, scheduleData.rotation);
+    suggestedSlot = computeSuggestedSlot(scheduleData, scheduleData.slots || []);
+    renderScheduleRows(scheduleData.slots || [], scheduleData.rotation || [], suggestedSlot);
   } catch {
     window.filmCrew.setMutedMessage(scheduleList, "Could not load schedule.");
   }
@@ -636,7 +642,7 @@ scheduleList?.addEventListener("click", async (event) => {
   const action = btn.dataset.action;
   const rotation = scheduleData?.rotation ?? [];
 
-  if (action === "save-slot") {
+  if (action === "save-slot" || action === "add-slot") {
     const dateInput = row.querySelector(".schedule-date-input");
     const pickerSelect = row.querySelector(".schedule-picker-select");
     if (!dateInput.reportValidity()) return;
@@ -647,63 +653,19 @@ scheduleList?.addEventListener("click", async (event) => {
       const { slots } = await window.filmCrew.fetchJson("/api/schedule", {
         method: "PUT",
         body: JSON.stringify({
-          weekKey: row.dataset.weekKey || null,
+          weekKey: action === "add-slot" ? null : (row.dataset.weekKey || null),
           watchDate: dateInput.value,
           pickerDisplayName: pickerSelect.value || null
         })
       });
       scheduleData = { ...scheduleData, slots };
-      renderScheduleRows(slots, rotation);
-      if (scheduleMessage) scheduleMessage.textContent = "Saved.";
+      suggestedSlot = computeSuggestedSlot(scheduleData, slots || []);
+      renderScheduleRows(slots || [], rotation, suggestedSlot);
+      if (scheduleMessage) scheduleMessage.textContent = action === "add-slot" ? "Added." : "Saved.";
     } catch (err) {
-      if (scheduleMessage) scheduleMessage.textContent = err.message || "Could not save.";
+      if (scheduleMessage) scheduleMessage.textContent = err.message || (action === "add-slot" ? "Could not add." : "Could not save.");
       btn.disabled = false;
     }
     return;
-  }
-});
-
-addScheduleSlotBtn?.addEventListener("click", () => {
-  if (!scheduleData) return;
-  const rotation = scheduleData.rotation ?? [];
-
-  // Walk all rows (saved + unsaved) to find the last date and picker
-  const allRows = Array.from(scheduleList.querySelectorAll(".schedule-row"));
-  let lastDate = scheduleData.latestDate;
-  let lastPicker = scheduleData.latestPickerName;
-
-  for (const r of allRows) {
-    const d = r.querySelector(".schedule-date-input")?.value;
-    if (d && (!lastDate || d > lastDate)) lastDate = d;
-    const p = r.querySelector(".schedule-picker-select")?.value;
-    if (p) lastPicker = p;
-  }
-
-  if (!lastDate) lastDate = new Date().toISOString().slice(0, 10);
-
-  const nextDate = suggestNextThursday(lastDate);
-
-  const lastIdx = lastPicker ? rotation.findIndex((m) => m.displayName === lastPicker) : -1;
-  const nextPicker = rotation.length ? rotation[(lastIdx + 1) % rotation.length] : null;
-
-  if (!rotation.length) {
-    if (scheduleMessage) scheduleMessage.textContent = "No rotation set up yet.";
-    return;
-  }
-
-  const row = cloneTemplate("schedule-row-tpl");
-  // No dataset.weekKey — marks it as unsaved
-
-  const dateInput = row.querySelector(".schedule-date-input");
-  dateInput.value = nextDate;
-
-  const pickerSelect = row.querySelector(".schedule-picker-select");
-  pickerSelect.replaceChildren(...buildPickerOptions(rotation, nextPicker?.displayName ?? null));
-
-  const existingRows = scheduleList.querySelectorAll(".schedule-row");
-  if (!existingRows.length) {
-    scheduleList.replaceChildren(row);
-  } else {
-    scheduleList.appendChild(row);
   }
 });
