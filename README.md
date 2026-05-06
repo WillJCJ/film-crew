@@ -37,6 +37,14 @@ DEV_AUTH_EMAIL=me@example.com
 
 When `DEV_AUTH_EMAIL` is set, local `wrangler dev` requests authenticate as that member without Cloudflare One.
 
+You can point local dev at remote infrastructure with `wrangler dev --remote`, but for day-to-day work it is usually safer to keep a local D1 copy.
+
+To refresh local D1 from remote on demand:
+
+```sh
+npm run db:pull
+```
+
 5. Start local development with automatic rebuild/reload on source changes.
 
 ```sh

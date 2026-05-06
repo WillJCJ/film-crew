@@ -26,7 +26,7 @@ pageScript: /assets/dashboard.js
     <form id="rating-form" class="stack-form hidden">
       <label>
         <span>Score</span>
-        <input type="number" name="score" min="1" max="10" required>
+        <input type="text" name="score" inputmode="decimal" placeholder="e.g. 7.5">
       </label>
       <label>
         <span>Review</span>
@@ -36,6 +36,64 @@ pageScript: /assets/dashboard.js
       <p id="rating-message" class="form-message"></p>
     </form>
   </div>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Upcoming</p>
+      <h2>Next pick</h2>
+    </div>
+  </div>
+  <div id="next-pick-content">
+    <p class="muted">Loading…</p>
+  </div>
+  <form id="screening-day-form" class="inline-form">
+    <label>
+      <span>Screening day</span>
+      <select name="day">
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+    </label>
+    <button class="button secondary" type="submit">Save</button>
+    <p id="screening-day-message" class="form-message"></p>
+  </form>
+</section>
+
+<section id="my-pick-panel" class="panel hidden">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">This week</p>
+      <h2>It's your pick</h2>
+    </div>
+  </div>
+  <form id="my-pick-film-search-form" class="inline-form">
+    <label class="grow">
+      <span>Search OMDb</span>
+      <input type="search" name="query" placeholder="Search by film title" required>
+    </label>
+    <button class="button secondary" type="submit">Search</button>
+  </form>
+  <div id="my-pick-film-search-results" class="cards-grid compact"></div>
+  <form id="my-pick-form" class="stack-form hidden">
+    <input type="hidden" name="imdbId">
+    <label>
+      <span>Defer to guest <span class="muted">(optional — leave blank to pick yourself)</span></span>
+      <input type="text" name="guestPickerName" placeholder="e.g. Sarah">
+    </label>
+    <label>
+      <span>Notes</span>
+      <textarea name="notes" rows="3" placeholder="Optional context for the week."></textarea>
+    </label>
+    <button class="button primary" type="submit">Confirm pick</button>
+    <p id="my-pick-message" class="form-message"></p>
+  </form>
 </section>
 
 <section class="panel">
@@ -93,6 +151,18 @@ pageScript: /assets/dashboard.js
   <div class="section-heading">
     <div>
       <p class="eyebrow">Admin</p>
+      <h2>Pick rotation</h2>
+    </div>
+    <div class="section-actions">
+      <button id="save-rotation-btn" class="button secondary" type="button">Save rotation</button>
+    </div>
+  </div>
+  <div id="rotation-list" class="stack-form"></div>
+  <p id="rotation-message" class="form-message"></p>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Admin</p>
       <h2>Create a screening</h2>
     </div>
   </div>
@@ -132,4 +202,15 @@ pageScript: /assets/dashboard.js
   </div>
   <div id="admin-profiles-list" class="stack-form"></div>
   <p id="admin-profiles-message" class="form-message"></p>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Admin</p>
+      <h2>Film data</h2>
+    </div>
+    <div class="section-actions">
+      <button id="refresh-all-films-btn" class="btn btn-secondary">Refresh all film metadata</button>
+    </div>
+  </div>
+  <p id="refresh-all-films-message" class="form-message"></p>
 </section>

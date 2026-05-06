@@ -138,7 +138,8 @@ function renderChooserLine(target, screening) {
   target.replaceChildren(prefix, chooserNode, suffix);
 }
 
-function renderScreeningCard(screening) {
+function renderScreeningCard(screening, options = {}) {
+  const { showPlot = true } = options;
   const tpl = document.getElementById("screening-card-tpl");
   const card = tpl.content.cloneNode(true).firstElementChild;
 
@@ -155,7 +156,14 @@ function renderScreeningCard(screening) {
   bind("title").textContent = screening.film.title;
   bind("yearGroup").textContent = `(${screening.film.year || "Unknown year"})`;
   renderChooserLine(bind("chooserLine"), screening);
-  bind("plot").textContent = screening.film.plot || "No plot stored yet.";
+  const plotEl = bind("plot");
+  if (showPlot) {
+    plotEl.textContent = screening.film.plot || "No plot stored yet.";
+    plotEl.hidden = false;
+  } else {
+    plotEl.textContent = "";
+    plotEl.hidden = true;
+  }
   const scoreEl = bind("score");
   scoreEl.textContent = formatAverage(screening.averageScore);
   applyScoreBandClass(scoreEl, screening.averageScore);

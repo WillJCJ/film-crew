@@ -61,9 +61,34 @@ async function routeRequest(request, env) {
     return handleAdminUpdateMemberProfile(request, env.DB);
   }
 
+  if (pathname === "/api/admin/rotation" && request.method === "PUT") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
+    return handleUpdateRotation(request, env.DB);
+  }
+
   if (pathname === "/api/screenings" && request.method === "GET") {
     const screenings = await listScreenings(env.DB);
     return json({ screenings });
+  }
+
+  if (pathname === "/api/stats" && request.method === "GET") {
+    return handleGetStats(env.DB);
+  }
+
+  if (pathname === "/api/rotation" && request.method === "GET") {
+    await extractMemberFromAuth(request, env);
+    return handleGetRotation(env.DB);
+  }
+
+  if (pathname === "/api/settings/screening-day" && request.method === "PUT") {
+    await extractMemberFromAuth(request, env);
+    return handleUpdateScreeningDay(request, env.DB);
+  }
+
+  if (pathname === "/api/screenings" && request.method === "POST") {
+    const member = await extractMemberFromAuth(request, env);
+    return handlePickerCreateScreening(request, env, member);
   }
 
   if (pathname === "/api/screenings/current" && request.method === "GET") {
@@ -88,6 +113,32 @@ async function routeRequest(request, env) {
     return handleUpsertRating(request, env, member, weekKey);
   }
 
+  if (pathname.match(/^\/api\/films\/tt\d+\/omdb$/) && request.method === "GET") {
+    await extractMemberFromAuth(request, env);
+    const imdbId = pathname.split("/")[3];
+    return handleGetFilmOmdb(env, imdbId);
+  }
+
+  if (pathname.match(/^\/api\/films\/tt\d+\/refresh$/) && request.method === "POST") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
+    const imdbId = pathname.split("/")[3];
+    return handleRefreshFilmOmdb(env, imdbId);
+  }
+
+  if (pathname === "/api/admin/films/refresh-all" && request.method === "POST") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
+    return handleRefreshAllFilms(env);
+  }
+
+  if (pathname.match(/^\/api\/admin\/screenings\/[\w-]+\/film$/) && request.method === "PATCH") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
+    const weekKey = pathname.split("/")[4];
+    return handleUpdateScreeningFilm(request, env, weekKey);
+  }
+
   if (pathname === "/api/admin/film-search" && request.method === "GET") {
     const member = await extractMemberFromAuth(request, env);
     await requireAdmin(env.DB, member);
@@ -108,7 +159,14 @@ async function routeRequest(request, env) {
     return handleCreateScreening(request, env);
   }
 
-  const assetResponse = await env.ASSETS.fetch(request);
+  let assetRequest = request;
+  if (request.method === "GET" && /^\/archive\/[\w-]+\/?$/.test(pathname)) {
+    const rewritten = new URL(request.url);
+    rewritten.pathname = "/archive-detail/";
+    assetRequest = new Request(rewritten.toString(), request);
+  }
+
+  const assetResponse = await env.ASSETS.fetch(assetRequest);
   const contentType = assetResponse.headers.get("content-type") || "";
   if (!contentType.includes("text/html")) {
     return assetResponse;
@@ -120,6 +178,11 @@ async function routeRequest(request, env) {
     authed = true;
   } catch {
     // not authenticated
+  }
+
+  const isDashboard = pathname === "/dashboard" || pathname === "/dashboard/";
+  if (!authed && isDashboard) {
+    return Response.redirect(new URL("/login/", request.url).toString(), 302);
   }
 
   if (!authed) {
@@ -480,7 +543,8 @@ async function listMembers(db) {
         display_name AS displayName,
         is_admin AS isAdmin,
         profile_color AS profileColor,
-        profile_emoji AS profileEmoji
+        profile_emoji AS profileEmoji,
+        rotation_order AS rotationOrder
       FROM members
       ORDER BY display_name ASC
     `
@@ -489,36 +553,146 @@ async function listMembers(db) {
   return result.results || [];
 }
 
+function nextOccurrenceOfDay(dayOfWeek) {
+  const now = new Date();
+  const todayDay = now.getUTCDay();
+  let daysUntil = (dayOfWeek - todayDay + 7) % 7;
+  if (daysUntil === 0) daysUntil = 7;
+  const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntil);
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+async function getRotationData(db) {
+  const [rotationResult, settingRow, lastScreeningRow] = await Promise.all([
+    db.prepare(
+      `SELECT display_name AS displayName, profile_color AS profileColor, profile_emoji AS profileEmoji, rotation_order AS rotationOrder
+       FROM members WHERE rotation_order IS NOT NULL ORDER BY rotation_order ASC`
+    ).all(),
+    db.prepare("SELECT value FROM settings WHERE key = 'screening_day'").first(),
+    db.prepare(
+      "SELECT chooser_member_id FROM weekly_screenings WHERE chooser_member_id IS NOT NULL ORDER BY week_key DESC LIMIT 1"
+    ).first()
+  ]);
+
+  const rotation = rotationResult.results || [];
+  const screeningDayOfWeek = Number(settingRow?.value ?? 4);
+  const nextScreeningDate = nextOccurrenceOfDay(screeningDayOfWeek);
+
+  let nextPicker = null;
+  if (rotation.length > 0) {
+    const lastPickerName = lastScreeningRow?.chooser_member_id || null;
+    const lastIdx = lastPickerName ? rotation.findIndex((m) => m.displayName === lastPickerName) : -1;
+    const nextIdx = lastIdx === -1 ? 0 : (lastIdx + 1) % rotation.length;
+    nextPicker = rotation[nextIdx];
+  }
+
+  return { rotation, nextPicker, screeningDayOfWeek, nextScreeningDate };
+}
+
+async function handleGetRotation(db) {
+  return json(await getRotationData(db));
+}
+
+async function handleUpdateScreeningDay(request, db) {
+  const body = await readJson(request);
+  const day = Number(body.day);
+  if (!Number.isInteger(day) || day < 0 || day > 6) {
+    return json({ error: "invalid_request", message: "day must be 0 (Sunday) to 6 (Saturday)." }, 400);
+  }
+  await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('screening_day', ?)").bind(String(day)).run();
+  return json({ screeningDayOfWeek: day });
+}
+
+async function handleUpdateRotation(request, db) {
+  const body = await readJson(request);
+  if (!Array.isArray(body.order)) {
+    return json({ error: "invalid_request", message: "order must be an array of display names." }, 400);
+  }
+  await db.prepare("UPDATE members SET rotation_order = NULL").run();
+  for (let i = 0; i < body.order.length; i++) {
+    await db.prepare("UPDATE members SET rotation_order = ? WHERE display_name = ?")
+      .bind(i, String(body.order[i])).run();
+  }
+  return json(await getRotationData(db));
+}
+
+async function handlePickerCreateScreening(request, env, member) {
+  const data = await getRotationData(env.DB);
+
+  if (!member.isAdmin) {
+    if (!data.nextPicker || data.nextPicker.displayName !== member.displayName) {
+      throw new HttpError(403, "It is not your turn to pick this week.", "forbidden");
+    }
+  }
+
+  const body = await readJson(request);
+  const imdbId = String(body.imdbId || "").trim();
+  const guestPickerName = String(body.guestPickerName || "").trim() || null;
+  const notes = String(body.notes || "").trim() || null;
+
+  if (!imdbId) {
+    return json({ error: "invalid_request", message: "imdbId is required." }, 400);
+  }
+
+  const watchDate = data.nextScreeningDate;
+  const weekKey = toWeekKey(watchDate);
+  const filmId = await ensureFilmByImdbId(env, imdbId);
+
+  if (!filmId) {
+    return json({ error: "omdb_error", message: "Unable to import film from OMDb." }, 502);
+  }
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO weekly_screenings (week_key, watch_date, chooser_member_id, guest_picker_name, film_id, notes, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).bind(weekKey, watchDate, member.displayName, guestPickerName, filmId, notes).run();
+
+    const screening = await getScreeningById(env.DB, weekKey);
+    return json({ screening }, 201);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE constraint failed")) {
+      return json({ error: "duplicate_week", message: "A screening for that week already exists." }, 409);
+    }
+    throw error;
+  }
+}
+
+async function handleGetStats(db) {
+  const [highestRow, lowestRow, memberRows, favRows] = await Promise.all([
+    db.prepare(
+      "SELECT * FROM v_film_scores ORDER BY averageScore DESC LIMIT 1"
+    ).first(),
+    db.prepare(
+      "SELECT * FROM v_film_scores ORDER BY averageScore ASC LIMIT 1"
+    ).first(),
+    db.prepare(
+      "SELECT * FROM v_member_rating_averages ORDER BY displayName ASC"
+    ).all(),
+    db.prepare(
+      "SELECT * FROM v_member_top_rated_films ORDER BY displayName ASC, watchDate DESC"
+    ).all()
+  ]);
+
+  // Deduplicate favorites: one per member (first row wins, which is most recent on tie)
+  const seenMembers = new Set();
+  const memberFavorites = (favRows.results || []).filter((row) => {
+    if (seenMembers.has(row.displayName)) return false;
+    seenMembers.add(row.displayName);
+    return true;
+  });
+
+  return json({
+    highestRated: highestRow || null,
+    lowestRated: lowestRow || null,
+    memberAverages: memberRows.results || [],
+    memberFavorites
+  });
+}
+
 async function listScreenings(db) {
   const result = await db.prepare(
-    `
-      SELECT
-        weekly_screenings.week_key AS weekKey,
-        weekly_screenings.watch_date AS watchDate,
-        weekly_screenings.guest_picker_name AS guestPickerName,
-        weekly_screenings.notes,
-        members.display_name AS chooserName,
-        members.profile_color AS chooserColor,
-        members.profile_emoji AS chooserEmoji,
-        films.imdb_id AS imdbId,
-        films.title,
-        films.year,
-        films.runtime,
-        films.director,
-        films.genre,
-        films.plot,
-        films.poster_url AS posterUrl,
-        films.imdb_rating AS imdbRating,
-        films.imdb_votes AS imdbVotes,
-        ROUND(AVG(ratings.score), 2) AS averageScore,
-        COUNT(ratings.rating_id) AS ratingCount
-      FROM weekly_screenings
-      LEFT JOIN members ON members.display_name = weekly_screenings.chooser_member_id
-      JOIN films ON films.id = weekly_screenings.film_id
-      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.week_key
-      GROUP BY weekly_screenings.week_key
-      ORDER BY (weekly_screenings.watch_date IS NULL), weekly_screenings.watch_date DESC
-    `
+    "SELECT * FROM v_screening_summary ORDER BY CASE WHEN watchDate IS NULL THEN 1 ELSE 0 END, watchDate DESC, weekKey DESC"
   ).all();
 
   return (result.results || []).map(mapScreeningSummary);
@@ -526,12 +700,7 @@ async function listScreenings(db) {
 
 async function getCurrentScreening(db) {
   const row = await db.prepare(
-    `
-      SELECT week_key
-      FROM weekly_screenings
-      ORDER BY (watch_date IS NULL), watch_date DESC
-      LIMIT 1
-    `
+    "SELECT week_key FROM weekly_screenings ORDER BY CASE WHEN watch_date IS NULL THEN 1 ELSE 0 END, watch_date DESC, week_key DESC LIMIT 1"
   ).first();
 
   if (!row) {
@@ -543,35 +712,7 @@ async function getCurrentScreening(db) {
 
 async function getScreeningById(db, weekKey) {
   const screening = await db.prepare(
-    `
-      SELECT
-        weekly_screenings.week_key AS weekKey,
-        weekly_screenings.watch_date AS watchDate,
-        weekly_screenings.guest_picker_name AS guestPickerName,
-        weekly_screenings.notes,
-        members.display_name AS chooserName,
-        members.profile_color AS chooserColor,
-        members.profile_emoji AS chooserEmoji,
-        films.imdb_id AS imdbId,
-        films.title,
-        films.year,
-        films.runtime,
-        films.director,
-        films.genre,
-        films.plot,
-        films.poster_url AS posterUrl,
-        films.imdb_rating AS imdbRating,
-        films.imdb_votes AS imdbVotes,
-        ROUND(AVG(ratings.score), 2) AS averageScore,
-        COUNT(ratings.rating_id) AS ratingCount
-      FROM weekly_screenings
-      LEFT JOIN members ON members.display_name = weekly_screenings.chooser_member_id
-      JOIN films ON films.id = weekly_screenings.film_id
-      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.week_key
-      WHERE weekly_screenings.week_key = ?
-      GROUP BY weekly_screenings.week_key
-      LIMIT 1
-    `
+    "SELECT * FROM v_screening_summary WHERE weekKey = ? LIMIT 1"
   )
     .bind(weekKey)
     .first();
@@ -581,21 +722,7 @@ async function getScreeningById(db, weekKey) {
   }
 
   const ratingsResult = await db.prepare(
-    `
-      SELECT
-        ratings.rating_id AS ratingId,
-        ratings.score,
-        ratings.reaction,
-        ratings.review,
-        ratings.updated_at AS updatedAt,
-        members.display_name AS memberName,
-        members.profile_color AS memberColor,
-        members.profile_emoji AS memberEmoji
-      FROM ratings
-      JOIN members ON members.display_name = ratings.member_id
-      WHERE ratings.screening_id = ?
-      ORDER BY members.display_name ASC
-    `
+    "SELECT * FROM v_rating_with_member WHERE screeningId = ? ORDER BY memberName ASC"
   )
     .bind(weekKey)
     .all();
@@ -683,6 +810,164 @@ async function ensureFilmByImdbId(env, imdbId) {
     .run();
 
   return Number(result.meta.last_row_id);
+}
+
+async function handleGetFilmOmdb(env, imdbId) {
+  const film = await fetchOmdbById(env, imdbId);
+  if (!film) {
+    return json({ error: "not_found", message: "Film not found in OMDb." }, 404);
+  }
+
+  return json({
+    film: {
+      imdbId: film.imdbId,
+      title: film.title,
+      year: film.year,
+      runtime: film.runtime,
+      director: film.director,
+      genre: film.genre,
+      plot: film.plot,
+      posterUrl: film.posterUrl,
+      imdbRating: film.imdbRating,
+      imdbVotes: film.imdbVotes,
+      raw: film.raw
+    }
+  });
+}
+
+async function handleRefreshFilmOmdb(env, imdbId) {
+  const film = await fetchOmdbById(env, imdbId);
+  if (!film) {
+    return json({ error: "not_found", message: "Film not found in OMDb." }, 404);
+  }
+
+  const result = await env.DB.prepare(
+    `
+      UPDATE films
+      SET
+        title = ?,
+        year = ?,
+        runtime = ?,
+        director = ?,
+        genre = ?,
+        plot = ?,
+        poster_url = ?,
+        imdb_rating = ?,
+        imdb_votes = ?,
+        raw_json = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE imdb_id = ?
+    `
+  )
+    .bind(
+      film.title,
+      film.year,
+      film.runtime,
+      film.director,
+      film.genre,
+      film.plot,
+      film.posterUrl,
+      film.imdbRating,
+      film.imdbVotes,
+      JSON.stringify(film.raw),
+      imdbId
+    )
+    .run();
+
+  if (Number(result.meta?.changes || 0) === 0) {
+    await env.DB.prepare(
+      `
+        INSERT INTO films (
+          imdb_id,
+          title,
+          year,
+          runtime,
+          director,
+          genre,
+          plot,
+          poster_url,
+          imdb_rating,
+          imdb_votes,
+          raw_json,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `
+    )
+      .bind(
+        film.imdbId,
+        film.title,
+        film.year,
+        film.runtime,
+        film.director,
+        film.genre,
+        film.plot,
+        film.posterUrl,
+        film.imdbRating,
+        film.imdbVotes,
+        JSON.stringify(film.raw)
+      )
+      .run();
+  }
+
+  return json({
+    refreshed: true,
+    film: {
+      imdbId: film.imdbId,
+      title: film.title,
+      year: film.year,
+      runtime: film.runtime,
+      director: film.director,
+      genre: film.genre,
+      plot: film.plot,
+      posterUrl: film.posterUrl,
+      imdbRating: film.imdbRating,
+      imdbVotes: film.imdbVotes,
+      raw: film.raw
+    }
+  });
+}
+
+async function handleRefreshAllFilms(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT imdb_id FROM films WHERE imdb_id IS NOT NULL ORDER BY imdb_id"
+  ).all();
+
+  const outcomes = [];
+  for (const row of results) {
+    try {
+      await handleRefreshFilmOmdb(env, row.imdb_id);
+      outcomes.push({ imdbId: row.imdb_id, ok: true });
+    } catch (err) {
+      outcomes.push({ imdbId: row.imdb_id, ok: false, error: String(err) });
+    }
+  }
+
+  const failed = outcomes.filter((o) => !o.ok);
+  return json({ total: outcomes.length, failed: failed.length, outcomes });
+}
+
+async function handleUpdateScreeningFilm(request, env, weekKey) {
+  const body = await readJson(request);
+  const imdbId = String(body.imdbId || "").trim();
+
+  if (!/^tt\d+$/.test(imdbId)) {
+    return json({ error: "invalid_request", message: "imdbId must be a valid IMDb ID (e.g. tt1234567)." }, 400);
+  }
+
+  const filmId = await ensureFilmByImdbId(env, imdbId);
+  if (!filmId) {
+    return json({ error: "omdb_error", message: "Unable to find or import film from OMDb." }, 502);
+  }
+
+  await env.DB.prepare(
+    "UPDATE weekly_screenings SET film_id = ?, updated_at = CURRENT_TIMESTAMP WHERE week_key = ?"
+  )
+    .bind(filmId, weekKey)
+    .run();
+
+  const screening = await getScreeningById(env.DB, weekKey);
+  return json({ screening });
 }
 
 async function searchOmdb(env, query) {

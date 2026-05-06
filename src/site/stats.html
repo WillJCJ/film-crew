@@ -1,0 +1,67 @@
+---
+layout: layouts/base.liquid
+title: Stats | Film Crew
+pageScript: /assets/stats.js
+---
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Aggregate</p>
+      <h1>Stats</h1>
+    </div>
+  </div>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">All time</p>
+      <h2>Extremes</h2>
+    </div>
+  </div>
+  <div class="content-grid" id="extremes-grid">
+    <p class="muted">Loading…</p>
+  </div>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">By member</p>
+      <h2>Averages</h2>
+    </div>
+  </div>
+  <div id="member-averages">
+    <p class="muted">Loading…</p>
+  </div>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">By member</p>
+      <h2>Favourite films</h2>
+    </div>
+  </div>
+  <div id="member-favorites">
+    <p class="muted">Loading…</p>
+  </div>
+</section>
+
+<template id="film-stat-card-tpl">
+  <article class="card stat-film-card">
+    <p class="eyebrow" data-bind="label"></p>
+    <h3><a data-bind="titleLink"></a> <span class="muted" data-bind="yearGroup"></span></h3>
+    <p><strong data-bind="score"></strong></p>
+  </article>
+</template>
+
+<template id="member-average-tpl">
+  <div class="member-stat-row">
+    <span data-bind="identity"></span>
+    <span data-bind="average" class="member-stat-value"></span>
+    <span data-bind="count" class="muted member-stat-count"></span>
+  </div>
+</template>
+
+<template id="member-favorite-tpl">
+  <div class="member-stat-row">
+    <span data-bind="identity"></span>
+    <a data-bind="filmLink" class="member-stat-film"></a>
+    <span data-bind="score" class="member-stat-value"></span>
+  </div>
+</template>
