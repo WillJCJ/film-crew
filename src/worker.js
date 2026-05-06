@@ -14,6 +14,7 @@ import {
 } from "./handlers/screenings.js";
 import { handleGetFilmOmdb, handleRefreshFilmOmdb, handleRefreshAllFilms } from "./handlers/films.js";
 import { handleGetRotation, handleUpdateScreeningDay, handleUpdateRotation } from "./handlers/rotation.js";
+import { handleGetSchedule, handleUpsertScheduleSlot } from "./handlers/schedule.js";
 import { handleGetStats } from "./handlers/stats.js";
 
 const app = new Hono();
@@ -58,6 +59,16 @@ app.put("/api/admin/rotation", async (c) => {
 
 app.get("/api/screenings", async (c) => {
   return json({ screenings: await listScreenings(c.env.DB) });
+});
+
+app.get("/api/schedule", async (c) => {
+  await extractMemberFromAuth(c.req.raw, c.env);
+  return handleGetSchedule(c.env.DB);
+});
+
+app.put("/api/schedule", async (c) => {
+  await extractMemberFromAuth(c.req.raw, c.env);
+  return handleUpsertScheduleSlot(c.req.raw, c.env.DB);
 });
 
 app.get("/api/stats", (c) => handleGetStats(c.env.DB));
@@ -116,8 +127,8 @@ app.post("/api/admin/films/refresh-all", async (c) => {
 });
 
 app.patch("/api/admin/screenings/:weekKey/film", async (c) => {
-  await extractMemberFromAuth(c.req.raw, c.env);
-  return handleUpdateScreeningFilm(c.req.raw, c.env, c.req.param("weekKey"));
+  const member = await extractMemberFromAuth(c.req.raw, c.env);
+  return handleUpdateScreeningFilm(c.req.raw, c.env, member, c.req.param("weekKey"));
 });
 
 app.get("/api/admin/film-search", async (c) => {

@@ -42,6 +42,22 @@ pageScript: /assets/dashboard.js
   </form>
 </section>
 
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Schedule</p>
+      <h2>Future screenings</h2>
+    </div>
+    <div class="section-actions">
+      <button id="add-schedule-slot-btn" class="button secondary">Add suggested</button>
+    </div>
+  </div>
+  <div id="schedule-list">
+    <p class="muted">Loading…</p>
+  </div>
+  <p id="schedule-message" class="form-message"></p>
+</section>
+
 <section id="my-pick-panel" class="panel hidden">
   <div class="section-heading">
     <div>
@@ -197,5 +213,15 @@ pageScript: /assets/dashboard.js
   <div class="color-picker-dot-wrap">
     <button type="button" class="color-dot" aria-label="Choose profile colour"></button>
     <input type="color" class="native-color-input" name="profileColor" required>
+  </div>
+</template>
+
+<template id="schedule-row-tpl">
+  <div class="schedule-row">
+    <input type="date" class="schedule-date-input" aria-label="Watch date" required>
+    <select class="schedule-picker-select" aria-label="Picker"></select>
+    <div class="schedule-row-actions">
+      <button class="button secondary compact" type="button" data-action="save-slot">Save</button>
+    </div>
   </div>
 </template>

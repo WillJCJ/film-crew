@@ -129,6 +129,7 @@ async function loadDashboard() {
     hydrateProfileForm(member);
     renderNextPickPanel(rotationData);
     hydrateScreeningDayForm(rotationData);
+    await loadSchedule();
 
     if (rotationData?.nextPicker?.displayName === member.displayName) {
       myPickPanel?.classList.remove("hidden");
@@ -558,3 +559,151 @@ myPickForm?.addEventListener("submit", async (event) => {
 });
 
 loadDashboard();
+
+// ─── Schedule ────────────────────────────────────────────────────────────────
+
+const scheduleList = document.querySelector("#schedule-list");
+const scheduleMessage = document.querySelector("#schedule-message");
+const addScheduleSlotBtn = document.querySelector("#add-schedule-slot-btn");
+
+let scheduleData = null; // { slots, rotation, latestDate, latestPickerName }
+
+function suggestNextThursday(fromDateStr) {
+  const date = new Date(`${fromDateStr}T00:00:00Z`);
+  const day = date.getUTCDay(); // 0=Sun … 6=Sat
+  let daysToAdd = (4 - day + 7) % 7 || 7; // days until Thursday; if already Thursday, go +7
+  // Mon(1) Tue(2) Wed(3): this week's Thursday is too close — jump an extra week
+  if (day >= 1 && day <= 3) daysToAdd += 7;
+  return new Date(date.getTime() + daysToAdd * 86400000).toISOString().slice(0, 10);
+}
+
+function buildPickerOptions(rotation, selectedName) {
+  const options = rotation.map((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.displayName;
+    opt.textContent = m.displayName;
+    if (m.displayName === selectedName) opt.selected = true;
+    return opt;
+  });
+
+  if (!options.some((opt) => opt.selected) && options[0]) {
+    options[0].selected = true;
+  }
+
+  return options;
+}
+
+function renderScheduleRows(slots, rotation) {
+  if (!scheduleList) return;
+  if (!slots.length) {
+    window.filmCrew.setMutedMessage(scheduleList, "No upcoming screenings scheduled.");
+    return;
+  }
+
+  const rows = slots.map((slot) => {
+    const row = cloneTemplate("schedule-row-tpl");
+    row.dataset.weekKey = slot.weekKey;
+
+    const dateInput = row.querySelector(".schedule-date-input");
+    dateInput.value = slot.watchDate;
+
+    const pickerSelect = row.querySelector(".schedule-picker-select");
+    pickerSelect.replaceChildren(...buildPickerOptions(rotation, slot.pickerDisplayName));
+
+    return row;
+  });
+
+  scheduleList.replaceChildren(...rows);
+}
+
+async function loadSchedule() {
+  if (!scheduleList) return;
+  try {
+    scheduleData = await window.filmCrew.fetchJson("/api/schedule");
+    renderScheduleRows(scheduleData.slots, scheduleData.rotation);
+  } catch {
+    window.filmCrew.setMutedMessage(scheduleList, "Could not load schedule.");
+  }
+}
+
+scheduleList?.addEventListener("click", async (event) => {
+  const btn = event.target.closest("[data-action]");
+  if (!btn) return;
+
+  const row = btn.closest(".schedule-row");
+  if (!row) return;
+
+  const action = btn.dataset.action;
+  const rotation = scheduleData?.rotation ?? [];
+
+  if (action === "save-slot") {
+    const dateInput = row.querySelector(".schedule-date-input");
+    const pickerSelect = row.querySelector(".schedule-picker-select");
+    if (!dateInput.reportValidity()) return;
+
+    btn.disabled = true;
+    if (scheduleMessage) scheduleMessage.textContent = "Saving…";
+    try {
+      const { slots } = await window.filmCrew.fetchJson("/api/schedule", {
+        method: "PUT",
+        body: JSON.stringify({
+          weekKey: row.dataset.weekKey || null,
+          watchDate: dateInput.value,
+          pickerDisplayName: pickerSelect.value || null
+        })
+      });
+      scheduleData = { ...scheduleData, slots };
+      renderScheduleRows(slots, rotation);
+      if (scheduleMessage) scheduleMessage.textContent = "Saved.";
+    } catch (err) {
+      if (scheduleMessage) scheduleMessage.textContent = err.message || "Could not save.";
+      btn.disabled = false;
+    }
+    return;
+  }
+});
+
+addScheduleSlotBtn?.addEventListener("click", () => {
+  if (!scheduleData) return;
+  const rotation = scheduleData.rotation ?? [];
+
+  // Walk all rows (saved + unsaved) to find the last date and picker
+  const allRows = Array.from(scheduleList.querySelectorAll(".schedule-row"));
+  let lastDate = scheduleData.latestDate;
+  let lastPicker = scheduleData.latestPickerName;
+
+  for (const r of allRows) {
+    const d = r.querySelector(".schedule-date-input")?.value;
+    if (d && (!lastDate || d > lastDate)) lastDate = d;
+    const p = r.querySelector(".schedule-picker-select")?.value;
+    if (p) lastPicker = p;
+  }
+
+  if (!lastDate) lastDate = new Date().toISOString().slice(0, 10);
+
+  const nextDate = suggestNextThursday(lastDate);
+
+  const lastIdx = lastPicker ? rotation.findIndex((m) => m.displayName === lastPicker) : -1;
+  const nextPicker = rotation.length ? rotation[(lastIdx + 1) % rotation.length] : null;
+
+  if (!rotation.length) {
+    if (scheduleMessage) scheduleMessage.textContent = "No rotation set up yet.";
+    return;
+  }
+
+  const row = cloneTemplate("schedule-row-tpl");
+  // No dataset.weekKey — marks it as unsaved
+
+  const dateInput = row.querySelector(".schedule-date-input");
+  dateInput.value = nextDate;
+
+  const pickerSelect = row.querySelector(".schedule-picker-select");
+  pickerSelect.replaceChildren(...buildPickerOptions(rotation, nextPicker?.displayName ?? null));
+
+  const existingRows = scheduleList.querySelectorAll(".schedule-row");
+  if (!existingRows.length) {
+    scheduleList.replaceChildren(row);
+  } else {
+    scheduleList.appendChild(row);
+  }
+});

@@ -651,6 +651,38 @@ fieldset {
   display: none;
 }
 
+/* Future screening schedule */
+.schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.schedule-row:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.schedule-date-input {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.schedule-picker-select {
+  flex: 1 1 auto;
+  min-width: 120px;
+  width: auto;
+}
+
+.schedule-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 @media (width <= 820px) {
   .site-header,
   .section-heading,
