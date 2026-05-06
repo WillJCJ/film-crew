@@ -10,6 +10,7 @@
     "lint:html": "npm run build:site && htmlhint \"dist/**/*.html\"",
     "lint:js": "eslint src/**/*.js eleventy.config.js",
     "lint:md": "markdownlint-cli2 README.md AGENTS.md",
+    "lint": "npm run lint:css && npm run lint:html && npm run lint:js && npm run lint:md",
     "dev": "concurrently -k -n SITE,WORKER -c yellow,cyan \"npm:dev:site\" \"npm:dev:worker\"",
     "dev:site": "eleventy --config=eleventy.config.js --watch",
     "dev:worker": "wrangler dev",
