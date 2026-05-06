@@ -104,11 +104,12 @@ wrangler d1 execute DB "INSERT INTO members (email, display_name, is_admin, crea
 
 ## Next implementation slices
 
-- Screening detail pages per week
 - Better validation and nicer error boundaries
 - Automated tests for auth and data helpers
 - Split up large worker.js into managable files
-- Import existing films from the spreadsheet
-- User profiles and stats pages
+- Stats page
 - Shortlist of film picks
 - Allow guest profiles and ratings
+- Filter/search archive
+- enrich existing films with OMDB/IMDB data
+- Click on individual archive items to enlarge

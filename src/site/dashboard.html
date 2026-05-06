@@ -38,6 +38,30 @@ pageScript: /assets/dashboard.js
   </div>
 </section>
 
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Profile</p>
+      <h2>Your display style</h2>
+    </div>
+  </div>
+  <form id="profile-form" class="inline-form">
+    <label>
+      <span>Emoji</span>
+      <input type="text" name="profileEmoji" required>
+    </label>
+    <label>
+      <span>Colour</span>
+      <div class="color-picker-dot-wrap">
+        <button type="button" class="color-dot" data-color-dot="self" aria-label="Choose profile colour"></button>
+        <input type="color" class="native-color-input" name="profileColor" required>
+      </div>
+    </label>
+    <button class="button primary" type="submit">Save profile</button>
+  </form>
+  <p id="profile-message" class="form-message"></p>
+</section>
+
 <template id="current-screening-tpl">
   <article class="detail-card">
     <p class="eyebrow" data-bind="weekKey"></p>
@@ -99,4 +123,13 @@ pageScript: /assets/dashboard.js
     <button class="button primary" type="submit">Create screening</button>
     <p id="create-screening-message" class="form-message"></p>
   </form>
+
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Admin</p>
+      <h2>Member display styles</h2>
+    </div>
+  </div>
+  <div id="admin-profiles-list" class="stack-form"></div>
+  <p id="admin-profiles-message" class="form-message"></p>
 </section>

@@ -108,6 +108,36 @@ function applyScoreBandClass(element, score) {
   element.classList.add(`rating-band-${getScoreBand(score)}`);
 }
 
+function createMemberIdentity(member) {
+  const emoji = member?.profileEmoji || "🏳️‍🌈";
+  const name = member?.name || "Guest";
+  const color = member?.profileColor || "";
+
+  const identity = createEl("span", { className: "member-identity" });
+  if (color) {
+    identity.style.color = color;
+  }
+
+  const emojiEl = createEl("span", { className: "member-emoji", text: emoji });
+  const nameEl = createEl("span", { className: "member-name", text: name });
+  identity.replaceChildren(emojiEl, nameEl);
+  return identity;
+}
+
+function renderChooserLine(target, screening) {
+  if (!target) {
+    return;
+  }
+
+  const prefix = document.createTextNode("Chosen by ");
+  const chooserNode = createMemberIdentity(screening.chooser || {});
+  const suffix = screening.watchDate
+    ? document.createTextNode(` on ${screening.watchDate}`)
+    : document.createTextNode("");
+
+  target.replaceChildren(prefix, chooserNode, suffix);
+}
+
 function renderScreeningCard(screening) {
   const tpl = document.getElementById("screening-card-tpl");
   const card = tpl.content.cloneNode(true).firstElementChild;
@@ -124,9 +154,7 @@ function renderScreeningCard(screening) {
   bind("weekKey").textContent = screening.weekKey;
   bind("title").textContent = screening.film.title;
   bind("yearGroup").textContent = `(${screening.film.year || "Unknown year"})`;
-  bind("chooserLine").textContent = screening.watchDate
-    ? `Chosen by ${screening.chooser.name} on ${screening.watchDate}`
-    : `Chosen by ${screening.chooser.name}`;
+  renderChooserLine(bind("chooserLine"), screening);
   bind("plot").textContent = screening.film.plot || "No plot stored yet.";
   const scoreEl = bind("score");
   scoreEl.textContent = formatAverage(screening.averageScore);
@@ -151,6 +179,8 @@ window.filmCrew = {
   formatAverage,
   getScoreBand,
   applyScoreBandClass,
+  createMemberIdentity,
+  renderChooserLine,
   renderScreeningCard,
   replaceChildren,
   setMutedMessage

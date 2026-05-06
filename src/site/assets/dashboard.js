@@ -7,6 +7,10 @@ const filmSearchForm = document.querySelector("#film-search-form");
 const filmSearchResults = document.querySelector("#film-search-results");
 const createScreeningForm = document.querySelector("#create-screening-form");
 const createScreeningMessage = document.querySelector("#create-screening-message");
+const profileForm = document.querySelector("#profile-form");
+const profileMessage = document.querySelector("#profile-message");
+const adminProfilesList = document.querySelector("#admin-profiles-list");
+const adminProfilesMessage = document.querySelector("#admin-profiles-message");
 
 let currentMember = null;
 let currentScreening = null;
@@ -19,6 +23,102 @@ function bind(root, name) {
   return root.querySelector(`[data-bind="${name}"]`);
 }
 
+function countGraphemes(value) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)).length;
+  }
+
+  return Array.from(value).length;
+}
+
+function isSingleEmoji(value) {
+  if (!value) {
+    return false;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || countGraphemes(trimmed) !== 1) {
+    return false;
+  }
+
+  if (/[\p{L}]/u.test(trimmed)) {
+    return false;
+  }
+
+  return /(\p{Extended_Pictographic}|\p{Regional_Indicator})/u.test(trimmed);
+}
+
+function validateEmojiInput(input) {
+  if (!input) {
+    return true;
+  }
+
+  const value = String(input.value || "").trim();
+  input.value = value;
+
+  const valid = isSingleEmoji(value);
+  input.setCustomValidity(valid ? "" : "Enter exactly one emoji, with no text.");
+  return valid;
+}
+
+function initColourPicker(dotButton, colourInput, selectedColour) {
+  if (!dotButton || !colourInput) {
+    return;
+  }
+
+  const chosen = (selectedColour || colourInput.value || "#3E8F3B").toUpperCase();
+  colourInput.value = chosen;
+  dotButton.style.backgroundColor = chosen;
+
+  if (!dotButton.dataset.boundColorPicker) {
+    dotButton.addEventListener("click", () => {
+      if (typeof colourInput.showPicker === "function") {
+        colourInput.showPicker();
+      } else {
+        colourInput.click();
+      }
+    });
+
+    colourInput.addEventListener("input", () => {
+      const value = String(colourInput.value || "#3E8F3B").toUpperCase();
+      colourInput.value = value;
+      dotButton.style.backgroundColor = value;
+    });
+
+    dotButton.dataset.boundColorPicker = "true";
+  } else {
+    colourInput.dispatchEvent(new Event("input"));
+  }
+}
+
+function createColorDotPicker(initialColor = "#3E8F3B") {
+  const wrapper = window.filmCrew.createEl("div", { className: "color-picker-dot-wrap" });
+  const dotButton = window.filmCrew.createEl("button", {
+    className: "color-dot",
+    attrs: {
+      type: "button",
+      "aria-label": "Choose profile colour"
+    }
+  });
+  const colourInput = window.filmCrew.createEl("input", {
+    className: "native-color-input",
+    attrs: {
+      type: "color",
+      name: "profileColor",
+      value: initialColor.toUpperCase(),
+      required: "required"
+    }
+  });
+
+  initColourPicker(dotButton, colourInput, initialColor);
+  wrapper.replaceChildren(dotButton, colourInput);
+  return { wrapper, dotButton, colourInput };
+}
+
 function renderRatings(ratings) {
   if (!ratings?.length) {
     return [window.filmCrew.createEl("p", { className: "muted", text: "No ratings submitted yet." })];
@@ -28,7 +128,12 @@ function renderRatings(ratings) {
     const item = cloneTemplate("rating-item-tpl");
     const summaryEl = bind(item, "summary");
     const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}`;
-    summaryEl.textContent = `${rating.memberName} · ${ratingLabel}`;
+    const identity = window.filmCrew.createMemberIdentity({
+      name: rating.memberName,
+      profileColor: rating.memberColor,
+      profileEmoji: rating.memberEmoji
+    });
+    summaryEl.replaceChildren(identity, document.createTextNode(` · ${ratingLabel}`));
     window.filmCrew.applyScoreBandClass(summaryEl, rating.score);
 
     const reviewEl = bind(item, "review");
@@ -54,9 +159,7 @@ function renderCurrentScreening(screening) {
   const card = cloneTemplate("current-screening-tpl");
   bind(card, "weekKey").textContent = screening.weekKey;
   bind(card, "title").textContent = screening.film.title;
-  bind(card, "chooserLine").textContent = screening.watchDate
-    ? `Chosen by ${screening.chooser.name} on ${screening.watchDate}`
-    : `Chosen by ${screening.chooser.name}`;
+  window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening);
   bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
   const scoreEl = bind(card, "score");
   scoreEl.textContent = window.filmCrew.formatAverage(screening.averageScore);
@@ -80,14 +183,24 @@ async function loadDashboard() {
 
     currentMember = member;
     currentScreening = screening;
-    dashboardUser.textContent = `Signed in as ${member.displayName}.`;
+    dashboardUser.replaceChildren(
+      document.createTextNode("Signed in as "),
+      window.filmCrew.createMemberIdentity({
+        name: member.displayName,
+        profileColor: member.profileColor,
+        profileEmoji: member.profileEmoji
+      }),
+      document.createTextNode(".")
+    );
     renderCurrentScreening(screening);
+    hydrateProfileForm(member);
 
     // Check if user is admin by attempting to access admin endpoint
     try {
       await window.filmCrew.fetchJson("/api/members");
       adminPanel.classList.remove("hidden");
       await populateMemberOptions();
+      await renderAdminProfileEditors();
     } catch {
       // User is not admin, hide admin panel
     }
@@ -103,6 +216,21 @@ async function loadDashboard() {
   }
 }
 
+function hydrateProfileForm(member) {
+  if (!profileForm) {
+    return;
+  }
+
+  const colourInput = profileForm.elements.profileColor;
+  const emojiInput = profileForm.elements.profileEmoji;
+  const dotButton = profileForm.querySelector('[data-color-dot="self"]');
+
+  colourInput.value = (member.profileColor || "#3E8F3B").toUpperCase();
+  emojiInput.value = member.profileEmoji || "🎬";
+  validateEmojiInput(emojiInput);
+  initColourPicker(dotButton, colourInput, colourInput.value);
+}
+
 async function populateMemberOptions() {
   const select = createScreeningForm.elements.chooserDisplayName;
   const { members } = await window.filmCrew.fetchJson("/api/members");
@@ -115,6 +243,108 @@ async function populateMemberOptions() {
   });
   select.replaceChildren(...options);
 }
+
+async function renderAdminProfileEditors() {
+  if (!adminProfilesList) {
+    return;
+  }
+
+  const { members } = await window.filmCrew.fetchJson("/api/members");
+  const cards = members.map((member) => {
+    const form = window.filmCrew.createEl("form", { className: "member-profile-row" });
+    form.dataset.displayName = member.displayName;
+
+    const title = window.filmCrew.createEl("p", { className: "member-profile-title" });
+    title.replaceChildren(window.filmCrew.createMemberIdentity({
+      name: member.displayName,
+      profileColor: member.profileColor,
+      profileEmoji: member.profileEmoji
+    }));
+
+    const controls = window.filmCrew.createEl("div", { className: "member-profile-controls" });
+    const emojiInput = window.filmCrew.createEl("input", {
+      attrs: {
+        name: "profileEmoji",
+        value: member.profileEmoji || "🎬",
+        required: "required"
+      }
+    });
+    const { wrapper: colourPickerWrap, colourInput: colourValueInput } = createColorDotPicker(member.profileColor || "#3E8F3B");
+    validateEmojiInput(emojiInput);
+    emojiInput.addEventListener("input", () => validateEmojiInput(emojiInput));
+
+    const saveButton = window.filmCrew.createEl("button", {
+      className: "button secondary",
+      text: "Save",
+      attrs: { type: "submit" }
+    });
+
+    controls.replaceChildren(emojiInput, colourPickerWrap, saveButton);
+    form.replaceChildren(title, controls);
+    return form;
+  });
+
+  adminProfilesList.replaceChildren(...cards);
+}
+
+profileForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!validateEmojiInput(profileForm.elements.profileEmoji) || !profileForm.reportValidity()) {
+    return;
+  }
+  profileMessage.textContent = "Saving profile…";
+
+  try {
+    const { member } = await window.filmCrew.fetchJson("/api/me/profile", {
+      method: "PUT",
+      body: JSON.stringify({
+        profileColor: profileForm.elements.profileColor.value,
+        profileEmoji: profileForm.elements.profileEmoji.value
+      })
+    });
+
+    currentMember = member;
+    hydrateProfileForm(member);
+    profileMessage.textContent = "Profile updated.";
+    await loadDashboard();
+  } catch (error) {
+    profileMessage.textContent = error.message;
+  }
+});
+
+adminProfilesList?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target.closest("form.member-profile-row");
+  if (!form) {
+    return;
+  }
+
+  if (!validateEmojiInput(form.elements.profileEmoji) || !form.reportValidity()) {
+    return;
+  }
+
+  adminProfilesMessage.textContent = "Saving member profile…";
+  try {
+    await window.filmCrew.fetchJson("/api/admin/members/profile", {
+      method: "PUT",
+      body: JSON.stringify({
+        displayName: form.dataset.displayName,
+        profileColor: form.elements.profileColor.value,
+        profileEmoji: form.elements.profileEmoji.value
+      })
+    });
+
+    adminProfilesMessage.textContent = "Member profile updated.";
+    await renderAdminProfileEditors();
+    await loadDashboard();
+  } catch (error) {
+    adminProfilesMessage.textContent = error.message;
+  }
+});
+
+profileForm?.elements.profileEmoji?.addEventListener("input", (event) => {
+  validateEmojiInput(event.target);
+});
 
 ratingForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

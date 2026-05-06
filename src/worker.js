@@ -43,9 +43,22 @@ async function routeRequest(request, env) {
     return json({ member });
   }
 
+  if (pathname === "/api/me/profile" && request.method === "PUT") {
+    const member = await extractMemberFromAuth(request, env);
+    return handleUpdateOwnProfile(request, env.DB, member);
+  }
+
   if (pathname === "/api/members" && request.method === "GET") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
     const members = await listMembers(env.DB);
     return json({ members });
+  }
+
+  if (pathname === "/api/admin/members/profile" && request.method === "PUT") {
+    const member = await extractMemberFromAuth(request, env);
+    await requireAdmin(env.DB, member);
+    return handleAdminUpdateMemberProfile(request, env.DB);
   }
 
   if (pathname === "/api/screenings" && request.method === "GET") {
@@ -163,12 +176,25 @@ async function extractMemberFromAuth(request, env) {
 
   return {
     email: member.email,
-    displayName: member.displayName
+    displayName: member.displayName,
+    isAdmin: Boolean(member.isAdmin),
+    profileColor: member.profileColor,
+    profileEmoji: member.profileEmoji
   };
 }
 
 async function getMemberByEmail(db, email) {
-  return db.prepare("SELECT email, display_name AS displayName FROM members WHERE email = ? LIMIT 1")
+  return db.prepare(`
+    SELECT
+      email,
+      display_name AS displayName,
+      is_admin AS isAdmin,
+      profile_color AS profileColor,
+      profile_emoji AS profileEmoji
+    FROM members
+    WHERE email = ?
+    LIMIT 1
+  `)
     .bind(email)
     .first();
 }
@@ -202,6 +228,115 @@ async function requireAdmin(db, member) {
   if (!adminRow) {
     throw new HttpError(403, "Admin access required.", "forbidden");
   }
+}
+
+async function handleUpdateOwnProfile(request, db, member) {
+  const body = await readJson(request);
+  const profile = parseProfileInput(body);
+
+  await updateMemberProfile(db, member.displayName, profile);
+  const refreshed = await getMemberByDisplayName(db, member.displayName);
+  return json({ member: refreshed });
+}
+
+async function handleAdminUpdateMemberProfile(request, db) {
+  const body = await readJson(request);
+  const displayName = String(body.displayName || "").trim();
+
+  if (!displayName) {
+    return json({ error: "invalid_request", message: "displayName is required." }, 400);
+  }
+
+  const profile = parseProfileInput(body);
+  await updateMemberProfile(db, displayName, profile);
+
+  const updated = await getMemberByDisplayName(db, displayName);
+  if (!updated) {
+    return json({ error: "not_found", message: "Member not found." }, 404);
+  }
+
+  return json({ member: updated });
+}
+
+function parseProfileInput(body) {
+  const rawColor = String(body.profileColor || "").trim();
+  const rawEmoji = String(body.profileEmoji || "").trim();
+
+  if (!/^#[0-9a-fA-F]{6}$/.test(rawColor)) {
+    throw new HttpError(400, "profileColor must be a hex value like #4A7C59.", "invalid_request");
+  }
+
+  if (!isSingleEmoji(rawEmoji)) {
+    throw new HttpError(400, "profileEmoji must be exactly one emoji, with no text.", "invalid_request");
+  }
+
+  return {
+    profileColor: rawColor.toUpperCase(),
+    profileEmoji: rawEmoji
+  };
+}
+
+function countGraphemes(value) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)).length;
+  }
+
+  return Array.from(value).length;
+}
+
+function isSingleEmoji(value) {
+  if (!value) {
+    return false;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || countGraphemes(trimmed) !== 1) {
+    return false;
+  }
+
+  if (/[\p{L}]/u.test(trimmed)) {
+    return false;
+  }
+
+  return /(\p{Extended_Pictographic}|\p{Regional_Indicator})/u.test(trimmed);
+}
+
+async function updateMemberProfile(db, displayName, profile) {
+  const result = await db.prepare(
+    `
+      UPDATE members
+      SET profile_color = ?, profile_emoji = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE display_name = ?
+    `
+  )
+    .bind(profile.profileColor, profile.profileEmoji, displayName)
+    .run();
+
+  if (Number(result.meta?.changes || 0) === 0) {
+    throw new HttpError(404, "Member not found.", "not_found");
+  }
+}
+
+async function getMemberByDisplayName(db, displayName) {
+  return db.prepare(
+    `
+      SELECT
+        email,
+        display_name AS displayName,
+        is_admin AS isAdmin,
+        profile_color AS profileColor,
+        profile_emoji AS profileEmoji
+      FROM members
+      WHERE display_name = ?
+      LIMIT 1
+    `
+  )
+    .bind(displayName)
+    .first();
 }
 
 async function handleCreateScreening(request, env) {
@@ -340,7 +475,12 @@ async function requireSession(request, env) {
 async function listMembers(db) {
   const result = await db.prepare(
     `
-      SELECT email, display_name AS displayName, is_admin AS isAdmin
+      SELECT
+        email,
+        display_name AS displayName,
+        is_admin AS isAdmin,
+        profile_color AS profileColor,
+        profile_emoji AS profileEmoji
       FROM members
       ORDER BY display_name ASC
     `
@@ -358,6 +498,8 @@ async function listScreenings(db) {
         weekly_screenings.guest_picker_name AS guestPickerName,
         weekly_screenings.notes,
         members.display_name AS chooserName,
+        members.profile_color AS chooserColor,
+        members.profile_emoji AS chooserEmoji,
         films.imdb_id AS imdbId,
         films.title,
         films.year,
@@ -408,6 +550,8 @@ async function getScreeningById(db, weekKey) {
         weekly_screenings.guest_picker_name AS guestPickerName,
         weekly_screenings.notes,
         members.display_name AS chooserName,
+        members.profile_color AS chooserColor,
+        members.profile_emoji AS chooserEmoji,
         films.imdb_id AS imdbId,
         films.title,
         films.year,
@@ -444,7 +588,9 @@ async function getScreeningById(db, weekKey) {
         ratings.reaction,
         ratings.review,
         ratings.updated_at AS updatedAt,
-        members.display_name AS memberName
+        members.display_name AS memberName,
+        members.profile_color AS memberColor,
+        members.profile_emoji AS memberEmoji
       FROM ratings
       JOIN members ON members.display_name = ratings.member_id
       WHERE ratings.screening_id = ?
@@ -467,7 +613,9 @@ function mapScreeningSummary(row) {
     guestPickerName: row.guestPickerName,
     notes: row.notes,
     chooser: {
-      name: row.chooserName || row.guestPickerName || "Guest"
+      name: row.chooserName || row.guestPickerName || "Guest",
+      profileColor: row.chooserColor || null,
+      profileEmoji: row.chooserEmoji || null
     },
     film: {
       imdbId: row.imdbId,
