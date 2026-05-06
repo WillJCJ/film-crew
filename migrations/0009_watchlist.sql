@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS watchlist (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  title      TEXT NOT NULL UNIQUE,
+  added_by   TEXT NOT NULL,
+  added_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (added_by) REFERENCES members(display_name)
+);

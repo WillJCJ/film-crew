@@ -130,6 +130,143 @@ app.post("/api/admin/screenings", async (c) => {
   return handleCreateScreening(c.req.raw, c.env);
 });
 
+// ── Bot API (/api/bot/*) ──────────────────────────────────────────────────────
+// Authenticated via X-Bot-Secret header instead of Cloudflare One.
+
+function botAuth(c) {
+  if (c.req.header("X-Bot-Secret") !== c.env.BOT_SECRET) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+}
+
+function isoWeekKey(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const year = d.getFullYear();
+  const week = Math.ceil(((d - new Date(year, 0, 1)) / 86400000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+// Resolve telegram username → member
+app.get("/api/bot/members/by-telegram/:username", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const member = await c.env.DB.prepare(
+      "SELECT display_name, email, is_admin FROM members WHERE telegram_username = ?"
+  ).bind(c.req.param("username")).first();
+  if (!member) return c.json({ error: "not_found" }, 404);
+  return c.json(member);
+});
+
+// All screenings (reuses existing listScreenings which queries v_screening_summary)
+app.get("/api/bot/screenings", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  return c.json(await listScreenings(c.env.DB));
+});
+
+// Most recent screening
+app.get("/api/bot/screenings/last", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const row = await c.env.DB.prepare(
+      "SELECT weekKey, watchDate, chooserName, guestPickerName, title, averageScore FROM v_screening_summary ORDER BY watchDate DESC LIMIT 1"
+  ).first();
+  return c.json(row ?? null);
+});
+
+// Screenings by picker name
+app.get("/api/bot/screenings/by/:name", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const { results } = await c.env.DB.prepare(
+      "SELECT weekKey, watchDate, chooserName, title, averageScore FROM v_screening_summary WHERE chooserName = ? ORDER BY watchDate DESC"
+  ).bind(c.req.param("name")).all();
+  return c.json(results);
+});
+
+// Create a screening from the bot (minimal film record, no OMDb)
+app.post("/api/bot/screenings", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const { title, display_name, watch_date } = await c.req.json();
+
+  // Find or create a minimal film record
+  let film = await c.env.DB.prepare(
+      "SELECT id FROM films WHERE LOWER(title) = LOWER(?)"
+  ).bind(title).first();
+
+  if (!film) {
+    const result = await c.env.DB.prepare(
+        "INSERT INTO films (title) VALUES (?)"
+    ).bind(title).run();
+    film = { id: result.meta.last_row_id };
+  }
+
+  const weekKey = (watch_date && watch_date !== "TBD")
+      ? isoWeekKey(new Date(watch_date))
+      : `bot-${Date.now()}`;
+
+  await c.env.DB.prepare(
+      "INSERT INTO weekly_screenings (week_key, watch_date, chooser_member_id, film_id) VALUES (?, ?, ?, ?)"
+  ).bind(weekKey, watch_date === "TBD" ? null : watch_date, display_name, film.id).run();
+
+  return c.json({ week_key: weekKey });
+});
+
+// Submit or update a rating
+app.post("/api/bot/ratings", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const { week_key, display_name, score } = await c.req.json();
+
+  await c.env.DB.prepare(`
+    INSERT INTO ratings (screening_id, member_id, score)
+    VALUES (?, ?, ?)
+    ON CONFLICT(screening_id, member_id)
+    DO UPDATE SET score = excluded.score, updated_at = CURRENT_TIMESTAMP
+  `).bind(week_key, display_name, score).run();
+
+  const avg = await c.env.DB.prepare(
+      "SELECT ROUND(AVG(score), 2) as avg_score FROM ratings WHERE screening_id = ? AND score IS NOT NULL"
+  ).bind(week_key).first();
+
+  return c.json({ avg_score: avg.avg_score });
+});
+
+// Watchlist
+app.get("/api/bot/watchlist", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const { results } = await c.env.DB.prepare(
+      "SELECT title, added_by FROM watchlist ORDER BY added_at ASC"
+  ).all();
+  return c.json(results);
+});
+
+app.post("/api/bot/watchlist", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const { title, added_by } = await c.req.json();
+  await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO watchlist (title, added_by) VALUES (?, ?)"
+  ).bind(title, added_by).run();
+  return c.json({ ok: true });
+});
+
+app.delete("/api/bot/watchlist/:title", async (c) => {
+  const err = botAuth(c);
+  if (err) return err;
+  const title = decodeURIComponent(c.req.param("title"));
+  const result = await c.env.DB.prepare(
+      "DELETE FROM watchlist WHERE LOWER(title) = LOWER(?)"
+  ).bind(title).run();
+  return c.json({ removed: result.meta.changes > 0 });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.get("*", async (c) => {
   let assetRequest = c.req.raw;
   if (/^\/archive\/[\w-]+\/?$/.test(c.req.path)) {
