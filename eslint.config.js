@@ -12,7 +12,7 @@ export default [
     }
   },
   {
-    files: ["src/worker.js"],
+    files: ["src/worker.js", "src/lib/**/*.js", "src/handlers/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.serviceworker
@@ -20,7 +20,7 @@ export default [
     }
   },
   {
-    files: ["eleventy.config.js"],
+    files: ["eleventy.config.js", "worker/tests/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.node

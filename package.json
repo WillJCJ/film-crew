@@ -8,7 +8,7 @@
     "build:site": "eleventy --config=eleventy.config.js",
     "lint:css": "stylelint \"src/site/assets/**/*.css\"",
     "lint:html": "npm run build:site && htmlhint \"dist/**/*.html\"",
-    "lint:js": "eslint src/**/*.js eleventy.config.js",
+    "lint:js": "eslint \"src/**/*.js\" \"worker/tests/**/*.js\" eleventy.config.js",
     "lint:md": "markdownlint-cli2 README.md AGENTS.md",
     "lint": "npm run lint:css && npm run lint:html && npm run lint:js && npm run lint:md",
     "dev": "concurrently -k -n SITE,WORKER -c yellow,cyan \"npm:dev:site\" \"npm:dev:worker\"",
@@ -19,7 +19,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:pull:remote": "mkdir -p .tmp && wrangler d1 export film-crew --remote --output .tmp/remote-d1-export.sql --skip-confirmation",
     "db:pull:local": "rm -rf .wrangler/state/v3/d1 && wrangler d1 execute film-crew --local --file .tmp/remote-d1-export.sql --yes",
-    "db:pull": "npm run db:pull:remote && npm run db:pull:local"
+    "db:pull": "npm run db:pull:remote && npm run db:pull:local",
+    "test": "node --test 'worker/tests/**/*.test.js'"
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.1.2",
@@ -32,5 +33,8 @@
     "stylelint": "^17.11.0",
     "stylelint-config-standard": "^40.0.0",
     "wrangler": "^4.15.0"
+  },
+  "dependencies": {
+    "hono": "^4.12.18"
   }
 }

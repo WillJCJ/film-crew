@@ -11,14 +11,14 @@ pageScript: /assets/archive-detail.js
       <h1 id="detail-title">Screening detail</h1>
     </div>
     <div class="section-actions">
-      <button id="refresh-omdb" class="button secondary" type="button" hidden>Refresh from OMDb</button>
+      <button id="refresh-omdb" class="button secondary" type="button">Refresh from OMDb</button>
       <a class="text-link" href="/archive/">Back to archive</a>
     </div>
   </div>
   <div id="archive-detail-content" class="content-grid">
     <p class="muted">Loading screening…</p>
   </div>
-  <form id="edit-imdb-form" class="inline-form" hidden>
+  <form id="edit-imdb-form" class="inline-form">
     <label for="edit-imdb-id">Change IMDb ID</label>
     <input id="edit-imdb-id" name="imdbId" type="text" placeholder="tt1234567" pattern="tt\d+" required>
     <button type="submit" class="button secondary">Save</button>
@@ -37,5 +37,19 @@ pageScript: /assets/archive-detail.js
     <p data-bind="plot"></p>
     <p><strong data-bind="score"></strong><span data-bind="ratingCount"></span></p>
     <div class="rating-list" data-bind="ratings"></div>
+  </article>
+</template>
+
+<template id="film-meta-row-tpl">
+  <div>
+    <dt data-bind="label"></dt>
+    <dd data-bind="value"></dd>
+  </div>
+</template>
+
+<template id="rating-item-tpl">
+  <article class="rating-item">
+    <strong data-bind="summary"></strong>
+    <p data-bind="review"></p>
   </article>
 </template>

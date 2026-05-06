@@ -90,22 +90,7 @@ function applyScoreBandClass(element, score) {
   if (!element) {
     return;
   }
-
-  const allBands = [
-    "rating-band-none",
-    "rating-band-deep-red",
-    "rating-band-red",
-    "rating-band-orange",
-    "rating-band-light-orange",
-    "rating-band-yellow-green",
-    "rating-band-light-green",
-    "rating-band-green",
-    "rating-band-deep-green",
-    "rating-band-gold"
-  ];
-
-  element.classList.remove(...allBands);
-  element.classList.add(`rating-band-${getScoreBand(score)}`);
+  element.dataset.scoreBand = getScoreBand(score);
 }
 
 function createMemberIdentity(member) {
@@ -172,15 +157,6 @@ function renderScreeningCard(screening, options = {}) {
   return card;
 }
 
-async function initAuthState() {
-  try {
-    await fetchJson("/api/me");
-    document.body.setAttribute("data-authed", "");
-  } catch {
-    document.body.removeAttribute("data-authed");
-  }
-}
-
 window.filmCrew = {
   createEl,
   fetchJson,
@@ -193,7 +169,3 @@ window.filmCrew = {
   replaceChildren,
   setMutedMessage
 };
-
-document.addEventListener("DOMContentLoaded", () => {
-  initAuthState();
-});

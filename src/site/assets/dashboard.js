@@ -107,26 +107,10 @@ function initColourPicker(dotButton, colourInput, selectedColour) {
 }
 
 function createColorDotPicker(initialColor = "#3E8F3B") {
-  const wrapper = window.filmCrew.createEl("div", { className: "color-picker-dot-wrap" });
-  const dotButton = window.filmCrew.createEl("button", {
-    className: "color-dot",
-    attrs: {
-      type: "button",
-      "aria-label": "Choose profile colour"
-    }
-  });
-  const colourInput = window.filmCrew.createEl("input", {
-    className: "native-color-input",
-    attrs: {
-      type: "color",
-      name: "profileColor",
-      value: initialColor.toUpperCase(),
-      required: "required"
-    }
-  });
-
+  const wrapper = cloneTemplate("color-dot-picker-tpl");
+  const dotButton = wrapper.querySelector(".color-dot");
+  const colourInput = wrapper.querySelector(".native-color-input");
   initColourPicker(dotButton, colourInput, initialColor);
-  wrapper.replaceChildren(dotButton, colourInput);
   return { wrapper, dotButton, colourInput };
 }
 
@@ -273,36 +257,23 @@ async function renderAdminProfileEditors() {
 
   const { members } = await window.filmCrew.fetchJson("/api/members");
   const cards = members.map((member) => {
-    const form = window.filmCrew.createEl("form", { className: "member-profile-row" });
+    const form = cloneTemplate("member-profile-row-tpl");
     form.dataset.displayName = member.displayName;
 
-    const title = window.filmCrew.createEl("p", { className: "member-profile-title" });
-    title.replaceChildren(window.filmCrew.createMemberIdentity({
+    bind(form, "title").replaceChildren(window.filmCrew.createMemberIdentity({
       name: member.displayName,
       profileColor: member.profileColor,
       profileEmoji: member.profileEmoji
     }));
 
-    const controls = window.filmCrew.createEl("div", { className: "member-profile-controls" });
-    const emojiInput = window.filmCrew.createEl("input", {
-      attrs: {
-        name: "profileEmoji",
-        value: member.profileEmoji || "🎬",
-        required: "required"
-      }
-    });
-    const { wrapper: colourPickerWrap } = createColorDotPicker(member.profileColor || "#3E8F3B");
+    const emojiInput = bind(form, "emojiInput");
+    emojiInput.value = member.profileEmoji || "🎬";
     validateEmojiInput(emojiInput);
     emojiInput.addEventListener("input", () => validateEmojiInput(emojiInput));
 
-    const saveButton = window.filmCrew.createEl("button", {
-      className: "button secondary",
-      text: "Save",
-      attrs: { type: "submit" }
-    });
+    const { wrapper: colourPickerWrap } = createColorDotPicker(member.profileColor || "#3E8F3B");
+    bind(form, "colorPicker").replaceWith(colourPickerWrap);
 
-    controls.replaceChildren(emojiInput, colourPickerWrap, saveButton);
-    form.replaceChildren(title, controls);
     return form;
   });
 
@@ -550,24 +521,18 @@ async function renderRotationAdmin() {
   function renderRows() {
     const rows = currentOrder.map((name, idx) => {
       const member = members.find((m) => m.displayName === name);
-      const row = window.filmCrew.createEl("div", { className: "rotation-row" });
-      const position = window.filmCrew.createEl("span", { className: "rotation-position muted", text: `${idx + 1}.` });
-      const identity = window.filmCrew.createMemberIdentity({
+      const row = cloneTemplate("rotation-row-tpl");
+      bind(row, "position").textContent = `${idx + 1}.`;
+      bind(row, "identity").replaceWith(window.filmCrew.createMemberIdentity({
         name: member.displayName,
         profileColor: member.profileColor,
         profileEmoji: member.profileEmoji
-      });
-      const upBtn = window.filmCrew.createEl("button", {
-        className: "button secondary compact",
-        text: "↑",
-        attrs: { type: "button", "aria-label": `Move ${name} up` }
-      });
+      }));
+      const upBtn = bind(row, "upBtn");
+      upBtn.setAttribute("aria-label", `Move ${name} up`);
       if (idx === 0) upBtn.disabled = true;
-      const downBtn = window.filmCrew.createEl("button", {
-        className: "button secondary compact",
-        text: "↓",
-        attrs: { type: "button", "aria-label": `Move ${name} down` }
-      });
+      const downBtn = bind(row, "downBtn");
+      downBtn.setAttribute("aria-label", `Move ${name} down`);
       if (idx === currentOrder.length - 1) downBtn.disabled = true;
 
       upBtn.addEventListener("click", () => {
@@ -579,7 +544,6 @@ async function renderRotationAdmin() {
         renderRows();
       });
 
-      row.replaceChildren(position, identity, upBtn, downBtn);
       return row;
     });
     rotationList.replaceChildren(...rows);

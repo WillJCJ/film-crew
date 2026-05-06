@@ -14,23 +14,19 @@ function bind(root, name) {
   return root.querySelector(`[data-bind="${name}"]`);
 }
 
-function makeMetaRow(label, valueNode) {
-  const fragment = document.createDocumentFragment();
-  fragment.append(
-    window.filmCrew.createEl("dt", { text: label }),
-    valueNode
-  );
-  return fragment;
-}
-
 function renderFilmMeta(screening) {
   const rows = [];
   const film = screening.film || {};
 
-  const pushText = (label, value) => {
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      rows.push(makeMetaRow(label, window.filmCrew.createEl("dd", { text: String(value) })));
+  const pushRow = (label, valueNode) => {
+    const row = cloneTemplate("film-meta-row-tpl");
+    bind(row, "label").textContent = label;
+    if (typeof valueNode === "string") {
+      bind(row, "value").textContent = valueNode;
+    } else {
+      bind(row, "value").replaceChildren(valueNode);
     }
+    rows.push(row);
   };
 
   if (film.imdbId) {
@@ -38,10 +34,14 @@ function renderFilmMeta(screening) {
       text: film.imdbId,
       attrs: { href: `https://www.imdb.com/title/${film.imdbId}/`, target: "_blank", rel: "noopener noreferrer" }
     });
-    const dd = window.filmCrew.createEl("dd");
-    dd.appendChild(link);
-    rows.push(makeMetaRow("IMDb ID", dd));
+    pushRow("IMDb ID", link);
   }
+
+  const pushText = (label, value) => {
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      pushRow(label, String(value));
+    }
+  };
 
   pushText("Runtime", film.runtime);
   pushText("Director", film.director);
@@ -62,21 +62,24 @@ function renderRatings(ratings) {
   }
 
   return ratings.map((rating) => {
-    const item = window.filmCrew.createEl("article", { className: "rating-item" });
-    const summary = window.filmCrew.createEl("strong");
+    const item = cloneTemplate("rating-item-tpl");
+    const summaryEl = bind(item, "summary");
     const label = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}`;
     const identity = window.filmCrew.createMemberIdentity({
       name: rating.memberName,
       profileColor: rating.memberColor,
       profileEmoji: rating.memberEmoji
     });
+    summaryEl.replaceChildren(identity, document.createTextNode(` · ${label}`));
+    window.filmCrew.applyScoreBandClass(summaryEl, rating.score);
 
-    summary.replaceChildren(identity, document.createTextNode(` · ${label}`));
-    window.filmCrew.applyScoreBandClass(summary, rating.score);
-    item.appendChild(summary);
-
+    const reviewEl = bind(item, "review");
     if (rating.review) {
-      item.appendChild(window.filmCrew.createEl("p", { text: rating.review }));
+      reviewEl.textContent = rating.review;
+      reviewEl.hidden = false;
+    } else {
+      reviewEl.textContent = "";
+      reviewEl.hidden = true;
     }
 
     return item;
@@ -142,18 +145,8 @@ async function loadArchiveDetail() {
     bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
     window.filmCrew.replaceChildren(contentTarget, [card]);
 
-    // Show editing controls for any authenticated user
-    try {
-      const { member } = await window.filmCrew.fetchJson("/api/me");
-      if (member) {
-        refreshButton.hidden = false;
-        if (editImdbForm) {
-          editImdbInput.value = screening.film.imdbId || "";
-          editImdbForm.hidden = false;
-        }
-      }
-    } catch {
-      // Not authenticated — controls stay hidden
+    if (editImdbInput) {
+      editImdbInput.value = screening.film.imdbId || "";
     }
   } catch (error) {
     window.filmCrew.setMutedMessage(contentTarget, error.message || "Could not load screening detail.");
