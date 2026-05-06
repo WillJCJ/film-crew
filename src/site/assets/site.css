@@ -98,6 +98,40 @@ main {
   gap: 24px;
 }
 
+.site-footer {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer-memorial {
+  margin: 0;
+  color: var(--muted);
+}
+
+.footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.footer-github:hover {
+  border-bottom-color: currentcolor;
+}
+
+.footer-github svg {
+  width: 18px;
+  height: 18px;
+  fill: currentcolor;
+}
+
 .panel {
   border: 1px solid var(--line);
   background: var(--panel);
