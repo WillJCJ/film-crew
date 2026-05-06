@@ -220,7 +220,7 @@ async function extractMemberFromAuth(request, env) {
     const payload = parts[1];
     const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
     claims = JSON.parse(decoded);
-  } catch (error) {
+  } catch {
     throw new HttpError(401, "Invalid authentication token.", "unauthorized");
   }
 
@@ -488,49 +488,6 @@ async function handleUpsertRating(request, env, member, weekKey) {
 
   const updatedScreening = await getScreeningById(env.DB, weekKey);
   return json({ screening: updatedScreening });
-}
-
-async function systemNeedsSetup(db) {
-  const row = await db.prepare("SELECT COUNT(*) AS memberCount FROM members").first();
-  return Number(row?.memberCount || 0) === 0;
-}
-
-async function requireSession(request, env) {
-  const token = readCookie(request, "film_crew_session");
-  if (!token) {
-    throw new HttpError(401, "Authentication required.", "unauthorized");
-  }
-
-  const sessionId = await sha256(token);
-  const session = await env.DB.prepare(
-    `
-      SELECT
-        sessions.expires_at AS expiresAt,
-        members.id AS memberId,
-        members.username AS username,
-        members.display_name AS displayName,
-        members.role AS role
-      FROM sessions
-      JOIN members ON members.id = sessions.member_id
-      WHERE sessions.id = ?
-      LIMIT 1
-    `
-  )
-    .bind(sessionId)
-    .first();
-
-  if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
-    throw new HttpError(401, "Session expired.", "unauthorized");
-  }
-
-  return {
-    member: {
-      id: session.memberId,
-      username: session.username,
-      displayName: session.displayName,
-      role: session.role
-    }
-  };
 }
 
 async function listMembers(db) {

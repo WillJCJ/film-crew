@@ -5,7 +5,6 @@ const editImdbForm = document.querySelector("#edit-imdb-form");
 const editImdbInput = document.querySelector("#edit-imdb-id");
 const editImdbMessage = document.querySelector("#edit-imdb-message");
 let currentScreening = null;
-let isAdmin = false;
 
 function cloneTemplate(id) {
   return document.getElementById(id).content.cloneNode(true).firstElementChild;
@@ -147,7 +146,6 @@ async function loadArchiveDetail() {
     try {
       const { member } = await window.filmCrew.fetchJson("/api/me");
       if (member) {
-        isAdmin = member.isAdmin;
         refreshButton.hidden = false;
         if (editImdbForm) {
           editImdbInput.value = screening.film.imdbId || "";
@@ -198,7 +196,6 @@ editImdbForm?.addEventListener("submit", async (event) => {
       body: JSON.stringify({ imdbId })
     });
     editImdbMessage.textContent = "Saved. Reloading…";
-    isAdmin = false; // reset so admin check re-runs after reload
     await loadArchiveDetail();
     editImdbMessage.textContent = "";
   } catch (err) {

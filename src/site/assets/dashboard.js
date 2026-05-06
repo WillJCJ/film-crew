@@ -226,7 +226,7 @@ async function loadDashboard() {
     } catch {
       // User is not admin, hide admin panel
     }
-  } catch (error) {
+  } catch {
     const loginLink = window.filmCrew.createEl("a", {
       className: "text-link",
       text: "Go to login page",
@@ -291,7 +291,7 @@ async function renderAdminProfileEditors() {
         required: "required"
       }
     });
-    const { wrapper: colourPickerWrap, colourInput: colourValueInput } = createColorDotPicker(member.profileColor || "#3E8F3B");
+    const { wrapper: colourPickerWrap } = createColorDotPicker(member.profileColor || "#3E8F3B");
     validateEmojiInput(emojiInput);
     emojiInput.addEventListener("input", () => validateEmojiInput(emojiInput));
 
