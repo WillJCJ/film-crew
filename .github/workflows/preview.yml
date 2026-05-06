@@ -1,0 +1,62 @@
+name: Preview Deployment
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build site assets
+        run: npm run build
+
+      - name: Deploy preview worker
+        id: deploy_preview
+        run: |
+          PREVIEW_NAME="film-crew-pr-${{ github.event.pull_request.number }}"
+          npx wrangler deploy --name "$PREVIEW_NAME" 2>&1 | tee /tmp/wrangler-preview.log
+
+          PREVIEW_URL=$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev' /tmp/wrangler-preview.log | tail -n 1)
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "Could not determine preview URL from wrangler output."
+            exit 1
+          fi
+
+          echo "preview_name=$PREVIEW_NAME" >> "$GITHUB_OUTPUT"
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Update PR with preview URL
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: cloudflare-preview
+          message: |
+            Cloudflare preview deployed.
+
+            - Worker: `${{ steps.deploy_preview.outputs.preview_name }}`
+            - URL: ${{ steps.deploy_preview.outputs.preview_url }}
