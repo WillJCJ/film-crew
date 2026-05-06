@@ -143,11 +143,11 @@ async function loadArchiveDetail() {
     bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
     window.filmCrew.replaceChildren(contentTarget, [card]);
 
-    // Show admin controls if the user is an admin
+    // Show editing controls for any authenticated user
     try {
       const { member } = await window.filmCrew.fetchJson("/api/me");
-      if (member?.isAdmin) {
-        isAdmin = true;
+      if (member) {
+        isAdmin = member.isAdmin;
         refreshButton.hidden = false;
         if (editImdbForm) {
           editImdbInput.value = screening.film.imdbId || "";
@@ -155,7 +155,7 @@ async function loadArchiveDetail() {
         }
       }
     } catch {
-      // Not authenticated or not admin — controls stay hidden
+      // Not authenticated — controls stay hidden
     }
   } catch (error) {
     window.filmCrew.setMutedMessage(contentTarget, error.message || "Could not load screening detail.");

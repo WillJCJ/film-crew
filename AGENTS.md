@@ -43,13 +43,13 @@ Rules:
 
 Prefix every commit with a bracketed type:
 
-[type] Imperative summary
+type: Imperative summary
 
 Examples:
 
-- [feat] Add expandable wallaby cards
-- [fix] Serve wallabies script via passthrough copy
-- [docs] Clarify local dev workflow
+- feat: Add expandable wallaby cards
+- fix: Serve wallabies script via passthrough copy
+- docs: Clarify local dev workflow
 
 Allowed commit types:
 

@@ -120,8 +120,7 @@ async function routeRequest(request, env) {
   }
 
   if (pathname.match(/^\/api\/films\/tt\d+\/refresh$/) && request.method === "POST") {
-    const member = await extractMemberFromAuth(request, env);
-    await requireAdmin(env.DB, member);
+    await extractMemberFromAuth(request, env);
     const imdbId = pathname.split("/")[3];
     return handleRefreshFilmOmdb(env, imdbId);
   }
@@ -133,8 +132,7 @@ async function routeRequest(request, env) {
   }
 
   if (pathname.match(/^\/api\/admin\/screenings\/[\w-]+\/film$/) && request.method === "PATCH") {
-    const member = await extractMemberFromAuth(request, env);
-    await requireAdmin(env.DB, member);
+    await extractMemberFromAuth(request, env);
     const weekKey = pathname.split("/")[4];
     return handleUpdateScreeningFilm(request, env, weekKey);
   }
