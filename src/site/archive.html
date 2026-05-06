@@ -4,6 +4,17 @@ layout: layouts/base.liquid
 title: Archive | Film Crew
 pageScript: /assets/archive.js
 ---
+
+<template id="screening-card-tpl">
+  <article class="card">
+    <img class="poster" data-bind="poster" alt="" hidden>
+    <p class="eyebrow" data-bind="weekKey"></p>
+    <h3><span data-bind="title"></span> <span class="muted" data-bind="yearGroup"></span></h3>
+    <p class="muted" data-bind="chooserLine"></p>
+    <p data-bind="plot"></p>
+    <p><strong data-bind="score"></strong><span data-bind="ratingCount"></span></p>
+  </article>
+</template>
 <section class="panel">
   <div class="section-heading">
     <div>

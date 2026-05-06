@@ -11,43 +11,49 @@ const createScreeningMessage = document.querySelector("#create-screening-message
 let currentMember = null;
 let currentScreening = null;
 
+function cloneTemplate(id) {
+  return document.getElementById(id).content.cloneNode(true).firstElementChild;
+}
+
+function bind(root, name) {
+  return root.querySelector(`[data-bind="${name}"]`);
+}
+
+function renderRatings(ratings) {
+  if (!ratings?.length) {
+    return [window.filmCrew.createEl("p", { className: "muted", text: "No ratings submitted yet." })];
+  }
+
+  return ratings.map((rating) => {
+    const item = cloneTemplate("rating-item-tpl");
+    const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}/10`;
+    bind(item, "summary").textContent = `${rating.memberName} · ${ratingLabel}`;
+    bind(item, "review").textContent = rating.review || "No review yet.";
+    return item;
+  });
+}
+
 function renderCurrentScreening(screening) {
   if (!screening) {
-    currentScreeningTarget.innerHTML = '<p class="muted">No screenings yet. Add one below if you are the admin.</p>';
+    window.filmCrew.setMutedMessage(currentScreeningTarget, "No screenings yet. Add one below if you are the admin.");
     ratingForm.classList.add("hidden");
     return;
   }
 
-  const ratings = screening.ratings?.length
-    ? `
-      <div class="rating-list">
-        ${screening.ratings
-          .map(
-            (rating) => `
-              <article class="rating-item">
-                <strong>${rating.memberName}</strong> · ${rating.score}/10
-                <p>${rating.review || "No review yet."}</p>
-              </article>
-            `
-          )
-          .join("")}
-      </div>
-    `
-    : '<p class="muted">No ratings submitted yet.</p>';
+  const card = cloneTemplate("current-screening-tpl");
+  bind(card, "weekKey").textContent = screening.weekKey;
+  bind(card, "title").textContent = screening.film.title;
+  bind(card, "chooserLine").textContent = screening.watchDate
+    ? `Chosen by ${screening.chooser.name} on ${screening.watchDate}`
+    : `Chosen by ${screening.chooser.name}`;
+  bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
+  bind(card, "score").textContent = window.filmCrew.formatAverage(screening.averageScore);
+  bind(card, "ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
+  bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
 
-  currentScreeningTarget.innerHTML = `
-    <article class="detail-card">
-      <p class="eyebrow">${screening.weekKey}</p>
-      <h2>${screening.film.title}</h2>
-      <p class="muted">Chosen by ${screening.chooser.name} on ${screening.watchDate}</p>
-      <p>${screening.film.plot || "No plot stored yet."}</p>
-      <p><strong>${window.filmCrew.formatAverage(screening.averageScore)}</strong> · ${screening.ratingCount} ratings</p>
-      ${ratings}
-    </article>
-  `;
-
+  currentScreeningTarget.replaceChildren(card);
   ratingForm.classList.remove("hidden");
-  const existing = screening.ratings.find((rating) => rating.memberId === currentMember.id);
+  const existing = screening.ratings.find((rating) => rating.memberName === currentMember.displayName);
   ratingForm.elements.score.value = existing?.score || "";
   ratingForm.elements.review.value = existing?.review || "";
 }
@@ -73,18 +79,28 @@ async function loadDashboard() {
       // User is not admin, hide admin panel
     }
   } catch (error) {
-    dashboardUser.innerHTML = 'You are not authenticated. <a class="text-link" href="/login/">Go to login page</a>.';
-    currentScreeningTarget.innerHTML = "";
+    const loginLink = window.filmCrew.createEl("a", {
+      className: "text-link",
+      text: "Go to login page",
+      attrs: { href: "/login/" }
+    });
+    dashboardUser.replaceChildren(document.createTextNode("You are not authenticated. "), loginLink, document.createTextNode("."));
+    window.filmCrew.replaceChildren(currentScreeningTarget, []);
     ratingForm.classList.add("hidden");
   }
 }
 
 async function populateMemberOptions() {
-  const select = createScreeningForm.elements.chooserMemberId;
+  const select = createScreeningForm.elements.chooserDisplayName;
   const { members } = await window.filmCrew.fetchJson("/api/members");
-  select.innerHTML = members
-    .map((member) => `<option value="${member.id}">${member.displayName}</option>`)
-    .join("");
+  const options = members.map((member) => {
+    const option = window.filmCrew.createEl("option", {
+      text: member.displayName,
+      attrs: { value: member.displayName }
+    });
+    return option;
+  });
+  select.replaceChildren(...options);
 }
 
 ratingForm?.addEventListener("submit", async (event) => {
@@ -95,7 +111,7 @@ ratingForm?.addEventListener("submit", async (event) => {
 
   ratingMessage.textContent = "Saving…";
   try {
-    const payload = await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.id}/ratings`, {
+    const payload = await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.weekKey}/ratings`, {
       method: "POST",
       body: JSON.stringify({
         score: Number(ratingForm.elements.score.value),
@@ -115,26 +131,35 @@ filmSearchForm?.addEventListener("submit", async (event) => {
   const formData = new FormData(filmSearchForm);
   const query = formData.get("query");
 
-  filmSearchResults.innerHTML = '<p class="muted">Searching…</p>';
+  window.filmCrew.setMutedMessage(filmSearchResults, "Searching...");
 
   try {
     const { results } = await window.filmCrew.fetchJson(`/api/admin/film-search?q=${encodeURIComponent(query)}`);
-    filmSearchResults.innerHTML = results.length
-      ? results
-          .map(
-            (film) => `
-              <article class="card">
-                ${film.posterUrl ? `<img class="poster" src="${film.posterUrl}" alt="${film.title} poster">` : ""}
-                <h3>${film.title}</h3>
-                <p class="muted">${film.year || "Unknown year"}</p>
-                <button class="button secondary" type="button" data-imdb-id="${film.imdbId}" data-film-title="${film.title}">Use this film</button>
-              </article>
-            `
-          )
-          .join("")
-      : '<p class="muted">No OMDb results matched that search.</p>';
+
+    if (!results.length) {
+      window.filmCrew.setMutedMessage(filmSearchResults, "No OMDb results matched that search.");
+      return;
+    }
+
+    const cards = results.map((film) => {
+      const card = cloneTemplate("film-search-card-tpl");
+      const poster = bind(card, "poster");
+      if (film.posterUrl) {
+        poster.src = film.posterUrl;
+        poster.alt = `${film.title} poster`;
+        poster.hidden = false;
+      }
+      bind(card, "title").textContent = film.title;
+      bind(card, "year").textContent = film.year || "Unknown year";
+      const btn = bind(card, "select");
+      btn.dataset.imdbId = film.imdbId;
+      btn.dataset.filmTitle = film.title;
+      return card;
+    });
+
+    window.filmCrew.replaceChildren(filmSearchResults, cards);
   } catch (error) {
-    filmSearchResults.innerHTML = `<p class="muted">${error.message}</p>`;
+    window.filmCrew.setMutedMessage(filmSearchResults, error.message);
   }
 });
 
@@ -158,7 +183,7 @@ createScreeningForm?.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         watchDate: createScreeningForm.elements.watchDate.value,
-        chooserMemberId: Number(createScreeningForm.elements.chooserMemberId.value),
+        chooserDisplayName: createScreeningForm.elements.chooserDisplayName.value,
         imdbId: createScreeningForm.elements.imdbId.value,
         notes: createScreeningForm.elements.notes.value
       })

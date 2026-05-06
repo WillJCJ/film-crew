@@ -28,11 +28,14 @@ wrangler d1 create film-crew
 npm run db:migrate:local
 ```
 
-4. Set the OMDb API key for local development in `.dev.vars`.
+4. Set local development variables in `.dev.vars`.
 
 ```dotenv
 OMDB_API_KEY=your-omdb-key
+DEV_AUTH_EMAIL=me@example.com
 ```
+
+When `DEV_AUTH_EMAIL` is set, local `wrangler dev` requests authenticate as that member without Cloudflare One.
 
 5. Build the Eleventy site and start Wrangler.
 
@@ -77,7 +80,8 @@ npm run deploy
 
 ## Members
 
-Members are seeded in the database and must authenticate through Cloudflare One using their configured email.
+Members are seeded in the database and authenticate through Cloudflare One using their configured email.
+For local development only, `DEV_AUTH_EMAIL` can impersonate a seeded member.
 
 To make someone an admin, update their D1 record:
 

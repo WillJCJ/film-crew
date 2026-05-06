@@ -58,9 +58,9 @@ async function routeRequest(request, env) {
     return json({ screening });
   }
 
-  if (pathname.match(/^\/api\/screenings\/\d+$/) && request.method === "GET") {
-    const screeningId = Number(pathname.split("/").pop());
-    const screening = await getScreeningById(env.DB, screeningId);
+  if (pathname.match(/^\/api\/screenings\/[\w-]+$/) && request.method === "GET") {
+    const weekKey = pathname.split("/").pop();
+    const screening = await getScreeningById(env.DB, weekKey);
 
     if (!screening) {
       return json({ error: "not_found", message: "Screening not found." }, 404);
@@ -69,10 +69,10 @@ async function routeRequest(request, env) {
     return json({ screening });
   }
 
-  if (pathname.match(/^\/api\/screenings\/\d+\/ratings$/) && request.method === "POST") {
+  if (pathname.match(/^\/api\/screenings\/[\w-]+\/ratings$/) && request.method === "POST") {
     const member = await extractMemberFromAuth(request, env);
-    const screeningId = Number(pathname.split("/")[3]);
-    return handleUpsertRating(request, env, member, screeningId);
+    const weekKey = pathname.split("/")[3];
+    return handleUpsertRating(request, env, member, weekKey);
   }
 
   if (pathname === "/api/admin/film-search" && request.method === "GET") {
@@ -95,12 +95,44 @@ async function routeRequest(request, env) {
     return handleCreateScreening(request, env);
   }
 
-  return env.ASSETS.fetch(request);
+  const assetResponse = await env.ASSETS.fetch(request);
+  const contentType = assetResponse.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) {
+    return assetResponse;
+  }
+
+  let authed = false;
+  try {
+    await extractMemberFromAuth(request, env);
+    authed = true;
+  } catch {
+    // not authenticated
+  }
+
+  if (!authed) {
+    return assetResponse;
+  }
+
+  const html = await assetResponse.text();
+  const patched = html.replace("<body>", '<body data-authed>');
+  const headers = new Headers(assetResponse.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.delete("content-length");
+  return new Response(patched, { status: assetResponse.status, headers });
 }
 
 async function extractMemberFromAuth(request, env) {
   const assertion = getAccessJwtAssertion(request);
   if (!assertion) {
+    const devEmail = String(env.DEV_AUTH_EMAIL || "").trim();
+    if (devEmail) {
+      const member = await getMemberByEmail(env.DB, devEmail);
+      if (!member) {
+        throw new HttpError(403, "DEV_AUTH_EMAIL does not match a seeded member.", "not_a_member");
+      }
+      return member;
+    }
+
     throw new HttpError(401, "Cloudflare One authentication required.", "unauthorized");
   }
 
@@ -123,19 +155,22 @@ async function extractMemberFromAuth(request, env) {
     throw new HttpError(401, "Token missing email claim.", "unauthorized");
   }
 
-  const member = await env.DB.prepare("SELECT id, email, display_name AS displayName FROM members WHERE email = ? LIMIT 1")
-    .bind(email)
-    .first();
+  const member = await getMemberByEmail(env.DB, email);
 
   if (!member) {
     throw new HttpError(403, "Member not found. Please contact an admin.", "not_a_member");
   }
 
   return {
-    id: member.id,
     email: member.email,
     displayName: member.displayName
   };
+}
+
+async function getMemberByEmail(db, email) {
+  return db.prepare("SELECT email, display_name AS displayName FROM members WHERE email = ? LIMIT 1")
+    .bind(email)
+    .first();
 }
 
 function getAccessJwtAssertion(request) {
@@ -160,8 +195,8 @@ function getAccessJwtAssertion(request) {
 }
 
 async function requireAdmin(db, member) {
-  const adminRow = await db.prepare("SELECT 1 FROM members WHERE id = ? AND is_admin = 1 LIMIT 1")
-    .bind(member.id)
+  const adminRow = await db.prepare("SELECT 1 FROM members WHERE display_name = ? AND is_admin = 1 LIMIT 1")
+    .bind(member.displayName)
     .first();
 
   if (!adminRow) {
@@ -172,21 +207,27 @@ async function requireAdmin(db, member) {
 async function handleCreateScreening(request, env) {
   const body = await readJson(request);
   const watchDate = String(body.watchDate || "").trim();
-  const chooserMemberId = Number(body.chooserMemberId);
+  const weekKeyInput = String(body.weekKey || "").trim();
+  const chooserDisplayName = String(body.chooserDisplayName || "").trim() || null;
+  const guestPickerName = String(body.guestPickerName || "").trim() || null;
   const imdbId = String(body.imdbId || "").trim();
   const notes = String(body.notes || "").trim() || null;
 
-  if (!watchDate || !chooserMemberId || !imdbId) {
+  if ((!watchDate && !weekKeyInput) || (!chooserDisplayName && !guestPickerName) || !imdbId) {
     return json(
       {
         error: "invalid_request",
-        message: "Watch date, chooser member, and IMDb ID are required."
+        message: "Provide watchDate or weekKey, chooserDisplayName or guestPickerName, and IMDb ID."
       },
       400
     );
   }
 
-  const weekKey = toWeekKey(watchDate);
+  const weekKey = watchDate ? toWeekKey(watchDate) : weekKeyInput;
+  if (!weekKey) {
+    return json({ error: "invalid_request", message: "weekKey is required when watchDate is omitted." }, 400);
+  }
+
   const filmId = await ensureFilmByImdbId(env, imdbId);
 
   if (!filmId) {
@@ -194,16 +235,16 @@ async function handleCreateScreening(request, env) {
   }
 
   try {
-    const result = await env.DB.prepare(
+    await env.DB.prepare(
       `
-        INSERT INTO weekly_screenings (week_key, watch_date, chooser_member_id, film_id, notes, updated_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO weekly_screenings (week_key, watch_date, chooser_member_id, guest_picker_name, film_id, notes, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `
     )
-      .bind(weekKey, watchDate, chooserMemberId, filmId, notes)
+      .bind(weekKey, watchDate || null, chooserDisplayName, guestPickerName, filmId, notes)
       .run();
 
-    const screening = await getScreeningById(env.DB, Number(result.meta.last_row_id));
+    const screening = await getScreeningById(env.DB, weekKey);
     return json({ screening }, 201);
   } catch (error) {
     if (String(error.message || "").includes("UNIQUE constraint failed")) {
@@ -214,17 +255,24 @@ async function handleCreateScreening(request, env) {
   }
 }
 
-async function handleUpsertRating(request, env, member, screeningId) {
+async function handleUpsertRating(request, env, member, weekKey) {
   const body = await readJson(request);
-  const score = Number(body.score);
+  const rawScore = body.score;
+  const hasScore = rawScore !== undefined && rawScore !== null && String(rawScore).trim() !== "";
+  const score = hasScore ? Number(rawScore) : null;
+  const reaction = String(body.reaction || "").trim() || null;
   const review = String(body.review || "").trim() || null;
 
-  if (!Number.isInteger(score) || score < 1 || score > 10) {
-    return json({ error: "invalid_request", message: "Score must be an integer from 1 to 10." }, 400);
+  if (!hasScore && !reaction) {
+    return json({ error: "invalid_request", message: "Provide a score or reaction." }, 400);
   }
 
-  const screening = await env.DB.prepare("SELECT id FROM weekly_screenings WHERE id = ? LIMIT 1")
-    .bind(screeningId)
+  if (hasScore && (!Number.isFinite(score) || score < 1)) {
+    return json({ error: "invalid_request", message: "Score must be a number greater than or equal to 1." }, 400);
+  }
+
+  const screening = await env.DB.prepare("SELECT week_key FROM weekly_screenings WHERE week_key = ? LIMIT 1")
+    .bind(weekKey)
     .first();
 
   if (!screening) {
@@ -233,16 +281,16 @@ async function handleUpsertRating(request, env, member, screeningId) {
 
   await env.DB.prepare(
     `
-      INSERT INTO ratings (screening_id, member_id, score, review, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO ratings (screening_id, member_id, score, reaction, review, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(screening_id, member_id)
-      DO UPDATE SET score = excluded.score, review = excluded.review, updated_at = CURRENT_TIMESTAMP
+      DO UPDATE SET score = excluded.score, reaction = excluded.reaction, review = excluded.review, updated_at = CURRENT_TIMESTAMP
     `
   )
-    .bind(screeningId, member.id, score, review)
+    .bind(weekKey, member.displayName, score, reaction, review)
     .run();
 
-  const updatedScreening = await getScreeningById(env.DB, screeningId);
+  const updatedScreening = await getScreeningById(env.DB, weekKey);
   return json({ screening: updatedScreening });
 }
 
@@ -292,7 +340,7 @@ async function requireSession(request, env) {
 async function listMembers(db) {
   const result = await db.prepare(
     `
-      SELECT id, username, display_name AS displayName, role
+      SELECT email, display_name AS displayName, is_admin AS isAdmin
       FROM members
       ORDER BY display_name ASC
     `
@@ -305,11 +353,10 @@ async function listScreenings(db) {
   const result = await db.prepare(
     `
       SELECT
-        weekly_screenings.id,
         weekly_screenings.week_key AS weekKey,
         weekly_screenings.watch_date AS watchDate,
+        weekly_screenings.guest_picker_name AS guestPickerName,
         weekly_screenings.notes,
-        members.id AS chooserId,
         members.display_name AS chooserName,
         films.imdb_id AS imdbId,
         films.title,
@@ -322,13 +369,13 @@ async function listScreenings(db) {
         films.imdb_rating AS imdbRating,
         films.imdb_votes AS imdbVotes,
         ROUND(AVG(ratings.score), 2) AS averageScore,
-        COUNT(ratings.id) AS ratingCount
+        COUNT(ratings.rating_id) AS ratingCount
       FROM weekly_screenings
-      JOIN members ON members.id = weekly_screenings.chooser_member_id
+      LEFT JOIN members ON members.display_name = weekly_screenings.chooser_member_id
       JOIN films ON films.id = weekly_screenings.film_id
-      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.id
-      GROUP BY weekly_screenings.id
-      ORDER BY weekly_screenings.watch_date DESC
+      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.week_key
+      GROUP BY weekly_screenings.week_key
+      ORDER BY (weekly_screenings.watch_date IS NULL), weekly_screenings.watch_date DESC
     `
   ).all();
 
@@ -338,9 +385,9 @@ async function listScreenings(db) {
 async function getCurrentScreening(db) {
   const row = await db.prepare(
     `
-      SELECT id
+      SELECT week_key
       FROM weekly_screenings
-      ORDER BY watch_date DESC
+      ORDER BY (watch_date IS NULL), watch_date DESC
       LIMIT 1
     `
   ).first();
@@ -349,18 +396,17 @@ async function getCurrentScreening(db) {
     return null;
   }
 
-  return getScreeningById(db, row.id);
+  return getScreeningById(db, row.week_key);
 }
 
-async function getScreeningById(db, screeningId) {
+async function getScreeningById(db, weekKey) {
   const screening = await db.prepare(
     `
       SELECT
-        weekly_screenings.id,
         weekly_screenings.week_key AS weekKey,
         weekly_screenings.watch_date AS watchDate,
+        weekly_screenings.guest_picker_name AS guestPickerName,
         weekly_screenings.notes,
-        members.id AS chooserId,
         members.display_name AS chooserName,
         films.imdb_id AS imdbId,
         films.title,
@@ -373,17 +419,17 @@ async function getScreeningById(db, screeningId) {
         films.imdb_rating AS imdbRating,
         films.imdb_votes AS imdbVotes,
         ROUND(AVG(ratings.score), 2) AS averageScore,
-        COUNT(ratings.id) AS ratingCount
+        COUNT(ratings.rating_id) AS ratingCount
       FROM weekly_screenings
-      JOIN members ON members.id = weekly_screenings.chooser_member_id
+      LEFT JOIN members ON members.display_name = weekly_screenings.chooser_member_id
       JOIN films ON films.id = weekly_screenings.film_id
-      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.id
-      WHERE weekly_screenings.id = ?
-      GROUP BY weekly_screenings.id
+      LEFT JOIN ratings ON ratings.screening_id = weekly_screenings.week_key
+      WHERE weekly_screenings.week_key = ?
+      GROUP BY weekly_screenings.week_key
       LIMIT 1
     `
   )
-    .bind(screeningId)
+    .bind(weekKey)
     .first();
 
   if (!screening) {
@@ -393,20 +439,19 @@ async function getScreeningById(db, screeningId) {
   const ratingsResult = await db.prepare(
     `
       SELECT
-        ratings.id,
+        ratings.rating_id AS ratingId,
         ratings.score,
+        ratings.reaction,
         ratings.review,
         ratings.updated_at AS updatedAt,
-        members.id AS memberId,
-        members.display_name AS memberName,
-        members.username
+        members.display_name AS memberName
       FROM ratings
-      JOIN members ON members.id = ratings.member_id
+      JOIN members ON members.display_name = ratings.member_id
       WHERE ratings.screening_id = ?
       ORDER BY members.display_name ASC
     `
   )
-    .bind(screeningId)
+    .bind(weekKey)
     .all();
 
   return {
@@ -417,13 +462,12 @@ async function getScreeningById(db, screeningId) {
 
 function mapScreeningSummary(row) {
   return {
-    id: row.id,
     weekKey: row.weekKey,
     watchDate: row.watchDate,
+    guestPickerName: row.guestPickerName,
     notes: row.notes,
     chooser: {
-      id: row.chooserId,
-      name: row.chooserName
+      name: row.chooserName || row.guestPickerName || "Guest"
     },
     film: {
       imdbId: row.imdbId,

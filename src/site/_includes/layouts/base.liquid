@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ title | default: "Film Crew" }}</title>
     <meta name="description" content="Track weekly film picks, ratings, and the running history for your crew.">
+    <link rel="icon" type="image/svg+xml" href="/assets/brand/pork-pie.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/brand/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/brand/apple-touch-icon.png">
     <link rel="stylesheet" href="/assets/site.css">
     <script defer src="/assets/app.js"></script>
     {% if pageScript %}
@@ -15,12 +19,18 @@
     <div class="page-shell">
       <header class="site-header">
         <div>
-          <a class="brand" href="/">Film Crew</a>
+          <a class="brand" href="/">
+            <img class="brand-mark" src="/assets/brand/pork-pie.svg" alt="">
+            <span>Film Crew</span>
+          </a>
           <p class="tagline">Weekly picks, scorecards, and a proper archive.</p>
         </div>
-        <nav id="site-nav" class="site-nav" aria-label="Main navigation">
+        <nav class="site-nav" aria-label="Main navigation">
           <a href="/">Home</a>
-          <a href="/login/">Login</a>
+          <a class="authed-only" href="/archive/">Archive</a>
+          <a class="authed-only" href="/dashboard/">Dashboard</a>
+          <a class="authed-only" href="/cdn-cgi/access/logout?redirect_url=%2Flogin%2F">Logout</a>
+          <a class="unauthed-only" href="/login/">Login</a>
         </nav>
       </header>
 

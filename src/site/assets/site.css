@@ -43,10 +43,18 @@ a {
 }
 
 .brand {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   font-size: clamp(2rem, 4vw, 3.6rem);
   font-weight: 700;
   text-decoration: none;
+}
+
+.brand-mark {
+  width: clamp(40px, 5vw, 56px);
+  height: clamp(40px, 5vw, 56px);
+  flex: 0 0 auto;
 }
 
 .tagline,
@@ -71,6 +79,11 @@ a {
 .text-link:hover {
   border-bottom-color: currentColor;
 }
+
+/* Auth-state nav visibility — toggled by data-authed on body (set by Worker) */
+.authed-only { display: none; }
+body[data-authed] .authed-only { display: revert; }
+body[data-authed] .unauthed-only { display: none; }
 
 main {
   display: grid;

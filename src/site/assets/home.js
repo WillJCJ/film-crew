@@ -8,16 +8,23 @@ async function loadHome() {
       window.filmCrew.fetchJson("/api/screenings")
     ]);
 
-    currentTarget.innerHTML = screening
-      ? window.filmCrew.renderScreeningCard(screening)
-      : '<p class="muted">No screenings have been added yet.</p>';
+    if (screening) {
+      window.filmCrew.replaceChildren(currentTarget, [window.filmCrew.renderScreeningCard(screening)]);
+    } else {
+      window.filmCrew.setMutedMessage(currentTarget, "No screenings have been added yet.");
+    }
 
-    recentTarget.innerHTML = screenings.length
-      ? screenings.slice(0, 3).map(window.filmCrew.renderScreeningCard).join("")
-      : '<p class="muted">The archive is still empty.</p>';
+    if (screenings.length) {
+      window.filmCrew.replaceChildren(
+        recentTarget,
+        screenings.slice(0, 3).map(window.filmCrew.renderScreeningCard)
+      );
+    } else {
+      window.filmCrew.setMutedMessage(recentTarget, "The archive is still empty.");
+    }
   } catch (error) {
-    currentTarget.innerHTML = `<p class="muted">${error.message}</p>`;
-    recentTarget.innerHTML = `<p class="muted">${error.message}</p>`;
+    window.filmCrew.setMutedMessage(currentTarget, error.message);
+    window.filmCrew.setMutedMessage(recentTarget, error.message);
   }
 }
 

@@ -16,54 +16,37 @@ async function fetchJson(path, options = {}) {
   return payload;
 }
 
-function getPathname() {
-  return window.location.pathname.replace(/\/+$/, "") || "/";
-}
-
-function isActivePath(href, pathname) {
-  if (href === "/") {
-    return pathname === "/";
+function createEl(tagName, options = {}) {
+  const el = document.createElement(tagName);
+  if (options.className) {
+    el.className = options.className;
   }
-
-  return pathname === href.replace(/\/+$/, "");
+  if (options.text !== undefined) {
+    el.textContent = options.text;
+  }
+  if (options.attrs) {
+    for (const [key, value] of Object.entries(options.attrs)) {
+      if (value !== undefined && value !== null) {
+        el.setAttribute(key, String(value));
+      }
+    }
+  }
+  return el;
 }
 
-function navLink(href, label, pathname) {
-  const active = isActivePath(href, pathname) ? ' aria-current="page"' : "";
-  return `<a href="${href}"${active}>${label}</a>`;
-}
-
-function setSignedOutNav(navEl, pathname) {
-  navEl.innerHTML = [
-    navLink("/", "Home", pathname),
-    navLink("/login/", "Login", pathname)
-  ].join("\n");
-}
-
-function setSignedInNav(navEl, pathname) {
-  navEl.innerHTML = [
-    navLink("/", "Home", pathname),
-    navLink("/archive/", "Archive", pathname),
-    navLink("/dashboard/", "Dashboard", pathname),
-    '<a href="/cdn-cgi/access/logout?redirect_url=%2Flogin%2F">Logout</a>'
-  ].join("\n");
-}
-
-async function initNavigation() {
-  const navEl = document.getElementById("site-nav");
-  if (!navEl) {
+function setMutedMessage(target, message) {
+  if (!target) {
     return;
   }
+  const paragraph = createEl("p", { className: "muted", text: message });
+  target.replaceChildren(paragraph);
+}
 
-  const pathname = getPathname();
-  setSignedOutNav(navEl, pathname);
-
-  try {
-    await fetchJson("/api/me");
-    setSignedInNav(navEl, pathname);
-  } catch {
-    setSignedOutNav(navEl, pathname);
+function replaceChildren(target, nodes) {
+  if (!target) {
+    return;
   }
+  target.replaceChildren(...nodes);
 }
 
 function formatAverage(value) {
@@ -71,27 +54,49 @@ function formatAverage(value) {
 }
 
 function renderScreeningCard(screening) {
-  const poster = screening.film.posterUrl
-    ? `<img class="poster" src="${screening.film.posterUrl}" alt="${screening.film.title} poster">`
-    : "";
-  const score = formatAverage(screening.averageScore);
+  const tpl = document.getElementById("screening-card-tpl");
+  const card = tpl.content.cloneNode(true).firstElementChild;
 
-  return `
-    <article class="card">
-      ${poster}
-      <p class="eyebrow">${screening.weekKey}</p>
-      <h3>${screening.film.title} <span class="muted">(${screening.film.year || "Unknown year"})</span></h3>
-      <p class="muted">Chosen by ${screening.chooser.name} on ${screening.watchDate}</p>
-      <p>${screening.film.plot || "No plot stored yet."}</p>
-      <p><strong>${score}</strong> · ${screening.ratingCount} ratings</p>
-    </article>
-  `;
+  const bind = (name) => card.querySelector(`[data-bind="${name}"]`);
+
+  const poster = bind("poster");
+  if (screening.film.posterUrl) {
+    poster.src = screening.film.posterUrl;
+    poster.alt = `${screening.film.title} poster`;
+    poster.hidden = false;
+  }
+
+  bind("weekKey").textContent = screening.weekKey;
+  bind("title").textContent = screening.film.title;
+  bind("yearGroup").textContent = `(${screening.film.year || "Unknown year"})`;
+  bind("chooserLine").textContent = screening.watchDate
+    ? `Chosen by ${screening.chooser.name} on ${screening.watchDate}`
+    : `Chosen by ${screening.chooser.name}`;
+  bind("plot").textContent = screening.film.plot || "No plot stored yet.";
+  bind("score").textContent = formatAverage(screening.averageScore);
+  bind("ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
+
+  return card;
+}
+
+async function initAuthState() {
+  try {
+    await fetchJson("/api/me");
+    document.body.setAttribute("data-authed", "");
+  } catch {
+    document.body.removeAttribute("data-authed");
+  }
 }
 
 window.filmCrew = {
+  createEl,
   fetchJson,
   formatAverage,
-  renderScreeningCard
+  renderScreeningCard,
+  replaceChildren,
+  setMutedMessage
 };
 
-document.addEventListener("DOMContentLoaded", initNavigation);
+document.addEventListener("DOMContentLoaded", () => {
+  initAuthState();
+});
