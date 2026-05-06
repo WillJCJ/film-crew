@@ -16,7 +16,6 @@
   --rating-light-green: #7bb279;
   --rating-green: #3e8f3b;
   --rating-deep-green: #1f6d2d;
-  --rating-gold: #b88700;
 }
 
 * {
@@ -91,12 +90,46 @@ a {
 
 /* Auth-state nav visibility — toggled by data-authed on body (set by Worker) */
 .authed-only { display: none; }
-body[data-authed] .authed-only { display: revert; }
+body[data-authed] .authed-only:not(.hidden) { display: revert; }
 body[data-authed] .unauthed-only { display: none; }
 
 main {
   display: grid;
   gap: 24px;
+}
+
+.site-footer {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer-memorial {
+  margin: 0;
+  color: var(--muted);
+}
+
+.footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.footer-github:hover {
+  border-bottom-color: currentcolor;
+}
+
+.footer-github svg {
+  width: 18px;
+  height: 18px;
+  fill: currentcolor;
 }
 
 .panel {
@@ -298,6 +331,95 @@ main {
   transform: translateY(-1px);
 }
 
+/* Archive expandable list */
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archive-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.archive-row:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.archive-row-summary {
+  display: grid;
+  grid-template-columns: 1em 1fr max-content max-content max-content;
+  align-items: baseline;
+  gap: 12px 20px;
+  padding: 12px 4px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.archive-row-summary::-webkit-details-marker {
+  display: none;
+}
+
+.archive-row-summary::before {
+  content: "▶";
+  font-size: 0.6em;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+details[open] > .archive-row-summary::before {
+  transform: rotate(90deg);
+}
+
+.archive-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.archive-row-year {
+  font-size: 0.85em;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.archive-row-chooser,
+.archive-row-date {
+  font-size: 0.88em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.archive-row-score {
+  text-align: right;
+  min-width: 5ch;
+}
+
+.archive-row-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 16px;
+  padding: 4px 4px 16px 20px;
+  align-items: start;
+}
+
+.archive-row-poster {
+  width: 72px;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}
+
+.archive-row-body-text {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
 .rating-list {
   display: grid;
   gap: 12px;
@@ -324,18 +446,60 @@ main {
 }
 
 #refresh-omdb,
-#edit-imdb-form {
+#detail-rating-form {
   display: none;
 }
 
 body[data-authed] #refresh-omdb,
-body[data-authed] #edit-imdb-form {
+body[data-authed] #detail-rating-form {
   display: revert;
+}
+
+.imdb-inline-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.imdb-inline-holder {
+  display: grid;
+  gap: 6px;
+}
+
+.imdb-inline-display input[type="text"] {
+  width: 14ch;
 }
 
 .rating-item {
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.rating-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.rating-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rating-remove-x {
+  border: none;
+  background: transparent;
+  color: var(--rating-red);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.rating-remove-x:hover {
+  color: var(--rating-deep-red);
 }
 
 .member-identity {
@@ -519,6 +683,49 @@ fieldset {
 
 .hidden {
   display: none;
+}
+
+/* Future screening schedule */
+.schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.schedule-row:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.schedule-date-input {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.schedule-picker-select {
+  flex: 1 1 auto;
+  min-width: 120px;
+  width: auto;
+}
+
+.schedule-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.schedule-add-btn {
+  background: var(--rating-orange);
+  border-color: var(--rating-orange);
+  color: #fff8f2;
+}
+
+.schedule-add-btn:hover {
+  background: var(--rating-light-orange);
+  border-color: var(--rating-light-orange);
 }
 
 @media (width <= 820px) {

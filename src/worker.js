@@ -8,11 +8,13 @@ import { handleUpdateOwnProfile, handleAdminUpdateMemberProfile } from "./handle
 import {
   handleCreateScreening,
   handlePickerCreateScreening,
+  handleDeleteOwnRating,
   handleUpsertRating,
   handleUpdateScreeningFilm
 } from "./handlers/screenings.js";
 import { handleGetFilmOmdb, handleRefreshFilmOmdb, handleRefreshAllFilms } from "./handlers/films.js";
 import { handleGetRotation, handleUpdateScreeningDay, handleUpdateRotation } from "./handlers/rotation.js";
+import { handleGetSchedule, handleUpsertScheduleSlot } from "./handlers/schedule.js";
 import { handleGetStats } from "./handlers/stats.js";
 
 const app = new Hono();
@@ -59,6 +61,16 @@ app.get("/api/screenings", async (c) => {
   return json({ screenings: await listScreenings(c.env.DB) });
 });
 
+app.get("/api/schedule", async (c) => {
+  await extractMemberFromAuth(c.req.raw, c.env);
+  return handleGetSchedule(c.env.DB);
+});
+
+app.put("/api/schedule", async (c) => {
+  await extractMemberFromAuth(c.req.raw, c.env);
+  return handleUpsertScheduleSlot(c.req.raw, c.env.DB);
+});
+
 app.get("/api/stats", (c) => handleGetStats(c.env.DB));
 
 app.get("/api/rotation", async (c) => {
@@ -93,6 +105,11 @@ app.post("/api/screenings/:weekKey/ratings", async (c) => {
   return handleUpsertRating(c.req.raw, c.env, member, c.req.param("weekKey"));
 });
 
+app.delete("/api/screenings/:weekKey/ratings", async (c) => {
+  const member = await extractMemberFromAuth(c.req.raw, c.env);
+  return handleDeleteOwnRating(c.env, member, c.req.param("weekKey"));
+});
+
 app.get("/api/films/:imdbId/omdb", async (c) => {
   await extractMemberFromAuth(c.req.raw, c.env);
   return handleGetFilmOmdb(c.env, c.req.param("imdbId"));
@@ -110,8 +127,8 @@ app.post("/api/admin/films/refresh-all", async (c) => {
 });
 
 app.patch("/api/admin/screenings/:weekKey/film", async (c) => {
-  await extractMemberFromAuth(c.req.raw, c.env);
-  return handleUpdateScreeningFilm(c.req.raw, c.env, c.req.param("weekKey"));
+  const member = await extractMemberFromAuth(c.req.raw, c.env);
+  return handleUpdateScreeningFilm(c.req.raw, c.env, member, c.req.param("weekKey"));
 });
 
 app.get("/api/admin/film-search", async (c) => {

@@ -14,56 +14,41 @@ pageScript: /assets/dashboard.js
   <div id="dashboard-user" class="status-strip">Authenticating with Cloudflare One…</div>
 </section>
 
-<section class="panel two-column">
-  <div>
-    <p class="eyebrow">Current Week</p>
-    <div id="dashboard-current-screening">
-      <p class="muted">Loading current screening…</p>
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Schedule</p>
+      <h2>Future screenings</h2>
     </div>
   </div>
-  <div>
-    <p class="eyebrow">Your Rating</p>
-    <form id="rating-form" class="stack-form hidden">
-      <label>
-        <span>Score</span>
-        <input type="text" name="score" inputmode="decimal" placeholder="e.g. 7.5">
-      </label>
-      <label>
-        <span>Review</span>
-        <textarea name="review" rows="5" placeholder="Short reaction, favorite scene, or whether the pick was chaos."></textarea>
-      </label>
-      <button class="button primary" type="submit">Save rating</button>
-      <p id="rating-message" class="form-message"></p>
-    </form>
+  <div id="schedule-list">
+    <p class="muted">Loading…</p>
   </div>
+  <p id="schedule-message" class="form-message"></p>
 </section>
 
 <section class="panel">
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Upcoming</p>
-      <h2>Next pick</h2>
+      <p class="eyebrow">Profile</p>
+      <h2>Your display style</h2>
     </div>
   </div>
-  <div id="next-pick-content">
-    <p class="muted">Loading…</p>
-  </div>
-  <form id="screening-day-form" class="inline-form">
+  <form id="profile-form" class="inline-form">
     <label>
-      <span>Screening day</span>
-      <select name="day">
-        <option value="0">Sunday</option>
-        <option value="1">Monday</option>
-        <option value="2">Tuesday</option>
-        <option value="3">Wednesday</option>
-        <option value="4">Thursday</option>
-        <option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
+      <span>Emoji</span>
+      <input type="text" name="profileEmoji" required>
     </label>
-    <button class="button secondary" type="submit">Save</button>
-    <p id="screening-day-message" class="form-message"></p>
+    <label>
+      <span>Colour</span>
+      <div class="color-picker-dot-wrap">
+        <button type="button" class="color-dot" data-color-dot="self" aria-label="Choose profile colour"></button>
+        <input type="color" class="native-color-input" name="profileColor" required>
+      </div>
+    </label>
+    <button class="button primary" type="submit">Save profile</button>
   </form>
+  <p id="profile-message" class="form-message"></p>
 </section>
 
 <section id="my-pick-panel" class="panel hidden">
@@ -95,48 +80,6 @@ pageScript: /assets/dashboard.js
     <p id="my-pick-message" class="form-message"></p>
   </form>
 </section>
-
-<section class="panel">
-  <div class="section-heading">
-    <div>
-      <p class="eyebrow">Profile</p>
-      <h2>Your display style</h2>
-    </div>
-  </div>
-  <form id="profile-form" class="inline-form">
-    <label>
-      <span>Emoji</span>
-      <input type="text" name="profileEmoji" required>
-    </label>
-    <label>
-      <span>Colour</span>
-      <div class="color-picker-dot-wrap">
-        <button type="button" class="color-dot" data-color-dot="self" aria-label="Choose profile colour"></button>
-        <input type="color" class="native-color-input" name="profileColor" required>
-      </div>
-    </label>
-    <button class="button primary" type="submit">Save profile</button>
-  </form>
-  <p id="profile-message" class="form-message"></p>
-</section>
-
-<template id="current-screening-tpl">
-  <article class="detail-card">
-    <p class="eyebrow" data-bind="weekKey"></p>
-    <h2 data-bind="title"></h2>
-    <p class="muted" data-bind="chooserLine"></p>
-    <p data-bind="plot"></p>
-    <p><strong data-bind="score"></strong><span data-bind="ratingCount"></span></p>
-    <div class="rating-list" data-bind="ratings"></div>
-  </article>
-</template>
-
-<template id="rating-item-tpl">
-  <article class="rating-item">
-    <strong data-bind="summary"></strong>
-    <p data-bind="review"></p>
-  </article>
-</template>
 
 <template id="film-search-card-tpl">
   <article class="card">
@@ -239,5 +182,15 @@ pageScript: /assets/dashboard.js
   <div class="color-picker-dot-wrap">
     <button type="button" class="color-dot" aria-label="Choose profile colour"></button>
     <input type="color" class="native-color-input" name="profileColor" required>
+  </div>
+</template>
+
+<template id="schedule-row-tpl">
+  <div class="schedule-row">
+    <input type="date" class="schedule-date-input" aria-label="Watch date" required>
+    <select class="schedule-picker-select" aria-label="Picker"></select>
+    <div class="schedule-row-actions">
+      <button class="button secondary compact" type="button" data-action="save-slot">Save</button>
+    </div>
   </div>
 </template>

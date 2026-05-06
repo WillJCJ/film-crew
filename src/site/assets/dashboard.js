@@ -1,7 +1,4 @@
 const dashboardUser = document.querySelector("#dashboard-user");
-const currentScreeningTarget = document.querySelector("#dashboard-current-screening");
-const ratingForm = document.querySelector("#rating-form");
-const ratingMessage = document.querySelector("#rating-message");
 const adminPanel = document.querySelector("#admin-panel");
 const filmSearchForm = document.querySelector("#film-search-form");
 const filmSearchResults = document.querySelector("#film-search-results");
@@ -11,19 +8,14 @@ const profileForm = document.querySelector("#profile-form");
 const profileMessage = document.querySelector("#profile-message");
 const adminProfilesList = document.querySelector("#admin-profiles-list");
 const adminProfilesMessage = document.querySelector("#admin-profiles-message");
-const nextPickContent = document.querySelector("#next-pick-content");
 const myPickPanel = document.querySelector("#my-pick-panel");
 const myPickFilmSearchForm = document.querySelector("#my-pick-film-search-form");
 const myPickFilmSearchResults = document.querySelector("#my-pick-film-search-results");
 const myPickForm = document.querySelector("#my-pick-form");
 const myPickMessage = document.querySelector("#my-pick-message");
-const screeningDayForm = document.querySelector("#screening-day-form");
-const screeningDayMessage = document.querySelector("#screening-day-message");
 const rotationList = document.querySelector("#rotation-list");
 const rotationMessage = document.querySelector("#rotation-message");
 
-let currentMember = null;
-let currentScreening = null;
 let rotationData = null;
 
 function cloneTemplate(id) {
@@ -114,71 +106,13 @@ function createColorDotPicker(initialColor = "#3E8F3B") {
   return { wrapper, dotButton, colourInput };
 }
 
-function renderRatings(ratings) {
-  if (!ratings?.length) {
-    return [window.filmCrew.createEl("p", { className: "muted", text: "No ratings submitted yet." })];
-  }
-
-  return ratings.map((rating) => {
-    const item = cloneTemplate("rating-item-tpl");
-    const summaryEl = bind(item, "summary");
-    const ratingLabel = rating.score === null || rating.score === undefined ? (rating.reaction || "No score") : `${rating.score}`;
-    const identity = window.filmCrew.createMemberIdentity({
-      name: rating.memberName,
-      profileColor: rating.memberColor,
-      profileEmoji: rating.memberEmoji
-    });
-    summaryEl.replaceChildren(identity, document.createTextNode(` · ${ratingLabel}`));
-    window.filmCrew.applyScoreBandClass(summaryEl, rating.score);
-
-    const reviewEl = bind(item, "review");
-    if (rating.review) {
-      reviewEl.textContent = rating.review;
-      reviewEl.hidden = false;
-    } else {
-      reviewEl.textContent = "";
-      reviewEl.hidden = true;
-    }
-
-    return item;
-  });
-}
-
-function renderCurrentScreening(screening) {
-  if (!screening) {
-    window.filmCrew.setMutedMessage(currentScreeningTarget, "No screenings yet. Add one below if you are the admin.");
-    ratingForm.classList.add("hidden");
-    return;
-  }
-
-  const card = cloneTemplate("current-screening-tpl");
-  bind(card, "weekKey").textContent = screening.weekKey;
-  bind(card, "title").textContent = screening.film.title;
-  window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening);
-  bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
-  const scoreEl = bind(card, "score");
-  scoreEl.textContent = window.filmCrew.formatAverage(screening.averageScore);
-  window.filmCrew.applyScoreBandClass(scoreEl, screening.averageScore);
-  bind(card, "ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
-  bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
-
-  currentScreeningTarget.replaceChildren(card);
-  ratingForm.classList.remove("hidden");
-  const existing = screening.ratings.find((rating) => rating.memberName === currentMember.displayName);
-  ratingForm.elements.score.value = existing?.score ?? "";
-  ratingForm.elements.review.value = existing?.review || "";
-}
-
 async function loadDashboard() {
   try {
-    const [{ member }, { screening }, fetchedRotation] = await Promise.all([
+    const [{ member }, fetchedRotation] = await Promise.all([
       window.filmCrew.fetchJson("/api/me"),
-      window.filmCrew.fetchJson("/api/screenings/current"),
       window.filmCrew.fetchJson("/api/rotation").catch(() => null)
     ]);
 
-    currentMember = member;
-    currentScreening = screening;
     rotationData = fetchedRotation;
     dashboardUser.replaceChildren(
       document.createTextNode("Signed in as "),
@@ -189,10 +123,8 @@ async function loadDashboard() {
       }),
       document.createTextNode(".")
     );
-    renderCurrentScreening(screening);
     hydrateProfileForm(member);
-    renderNextPickPanel(rotationData);
-    hydrateScreeningDayForm(rotationData);
+    await loadSchedule();
 
     if (rotationData?.nextPicker?.displayName === member.displayName) {
       myPickPanel?.classList.remove("hidden");
@@ -217,8 +149,6 @@ async function loadDashboard() {
       attrs: { href: "/login/" }
     });
     dashboardUser.replaceChildren(document.createTextNode("You are not authenticated. "), loginLink, document.createTextNode("."));
-    window.filmCrew.replaceChildren(currentScreeningTarget, []);
-    ratingForm.classList.add("hidden");
   }
 }
 
@@ -296,7 +226,6 @@ profileForm?.addEventListener("submit", async (event) => {
       })
     });
 
-    currentMember = member;
     hydrateProfileForm(member);
     profileMessage.textContent = "Profile updated.";
     await loadDashboard();
@@ -337,36 +266,6 @@ adminProfilesList?.addEventListener("submit", async (event) => {
 
 profileForm?.elements.profileEmoji?.addEventListener("input", (event) => {
   validateEmojiInput(event.target);
-});
-
-ratingForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!currentScreening) {
-    return;
-  }
-
-  const rawValue = ratingForm.elements.score.value.trim();
-  const numericValue = Number(rawValue);
-  if (!rawValue || isNaN(numericValue) || numericValue < 1) {
-    ratingMessage.textContent = "Enter a score of 1 or above (decimals allowed).";
-    return;
-  }
-
-  ratingMessage.textContent = "Saving…";
-  try {
-    const payload = await window.filmCrew.fetchJson(`/api/screenings/${currentScreening.weekKey}/ratings`, {
-      method: "POST",
-      body: JSON.stringify({
-        score: numericValue,
-        review: ratingForm.elements.review.value
-      })
-    });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
-    ratingMessage.textContent = "Rating saved.";
-  } catch (error) {
-    ratingMessage.textContent = error.message;
-  }
 });
 
 filmSearchForm?.addEventListener("submit", async (event) => {
@@ -431,11 +330,10 @@ createScreeningForm?.addEventListener("submit", async (event) => {
         notes: createScreeningForm.elements.notes.value
       })
     });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
+    const { screening } = payload;
     createScreeningForm.reset();
     createScreeningForm.classList.add("hidden");
-    createScreeningMessage.textContent = "Screening created.";
+    createScreeningMessage.textContent = `Screening created for ${screening.weekKey}.`;
   } catch (error) {
     createScreeningMessage.textContent = error.message;
   }
@@ -458,40 +356,6 @@ function initRefreshAllFilmsButton() {
       btn.disabled = false;
     }
   });
-}
-
-function renderNextPickPanel(data) {
-  if (!nextPickContent) return;
-  if (!data?.rotation?.length) {
-    window.filmCrew.setMutedMessage(nextPickContent, "Rotation not set up yet.");
-    return;
-  }
-
-  const { nextPicker, nextScreeningDate } = data;
-  if (!nextPicker) {
-    window.filmCrew.setMutedMessage(nextPickContent, "Could not determine next picker.");
-    return;
-  }
-
-  const formattedDate = new Date(nextScreeningDate + "T00:00:00Z").toLocaleDateString("en-GB", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC"
-  });
-
-  const identity = window.filmCrew.createMemberIdentity({
-    name: nextPicker.displayName,
-    profileColor: nextPicker.profileColor,
-    profileEmoji: nextPicker.profileEmoji
-  });
-
-  const pickerLine = window.filmCrew.createEl("p");
-  pickerLine.replaceChildren(identity, document.createTextNode(" picks next."));
-  const dateLine = window.filmCrew.createEl("p", { className: "muted", text: `Scheduled for ${formattedDate}.` });
-  nextPickContent.replaceChildren(pickerLine, dateLine);
-}
-
-function hydrateScreeningDayForm(data) {
-  if (!screeningDayForm) return;
-  screeningDayForm.elements.day.value = String(data?.screeningDayOfWeek ?? 4);
 }
 
 function updateCreateScreeningDefaults(data) {
@@ -565,8 +429,8 @@ async function renderRotationAdmin() {
         });
         if (rotationMessage) rotationMessage.textContent = "Rotation saved.";
         rotationData = await window.filmCrew.fetchJson("/api/rotation").catch(() => null);
-        renderNextPickPanel(rotationData);
         updateCreateScreeningDefaults(rotationData);
+        await loadSchedule();
       } catch (err) {
         if (rotationMessage) rotationMessage.textContent = err.message || "Could not save rotation.";
       } finally {
@@ -575,24 +439,6 @@ async function renderRotationAdmin() {
     });
   }
 }
-
-screeningDayForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const day = Number(screeningDayForm.elements.day.value);
-  if (screeningDayMessage) screeningDayMessage.textContent = "Saving…";
-  try {
-    await window.filmCrew.fetchJson("/api/settings/screening-day", {
-      method: "PUT",
-      body: JSON.stringify({ day })
-    });
-    rotationData = await window.filmCrew.fetchJson("/api/rotation").catch(() => null);
-    renderNextPickPanel(rotationData);
-    updateCreateScreeningDefaults(rotationData);
-    if (screeningDayMessage) screeningDayMessage.textContent = "Saved.";
-  } catch (err) {
-    if (screeningDayMessage) screeningDayMessage.textContent = err.message || "Could not save.";
-  }
-});
 
 myPickFilmSearchForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -645,15 +491,181 @@ myPickForm?.addEventListener("submit", async (event) => {
         notes: myPickForm.elements.notes.value.trim() || undefined
       })
     });
-    currentScreening = payload.screening;
-    renderCurrentScreening(currentScreening);
+    const { screening } = payload;
     myPickForm.reset();
     myPickForm.classList.add("hidden");
     myPickPanel.classList.add("hidden");
-    if (myPickMessage) myPickMessage.textContent = "Pick submitted.";
+    if (myPickMessage) myPickMessage.textContent = `Pick submitted for ${screening.weekKey}.`;
   } catch (error) {
     if (myPickMessage) myPickMessage.textContent = error.message;
   }
 });
 
 loadDashboard();
+
+// ─── Schedule ────────────────────────────────────────────────────────────────
+
+const scheduleList = document.querySelector("#schedule-list");
+const scheduleMessage = document.querySelector("#schedule-message");
+
+let scheduleData = null; // { slots, rotation, latestDate, latestPickerName }
+let suggestedSlot = null;
+
+function suggestNextThursday(fromDateStr) {
+  const date = new Date(`${fromDateStr}T00:00:00Z`);
+  const day = date.getUTCDay(); // 0=Sun … 6=Sat
+  let daysToAdd = (4 - day + 7) % 7 || 7; // days until Thursday; if already Thursday, go +7
+  // Mon(1) Tue(2) Wed(3): this week's Thursday is too close — jump an extra week
+  if (day >= 1 && day <= 3) daysToAdd += 7;
+  return new Date(date.getTime() + daysToAdd * 86400000).toISOString().slice(0, 10);
+}
+
+function buildPickerOptions(rotation, selectedName) {
+  const options = rotation.map((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.displayName;
+    opt.textContent = m.displayName;
+    if (m.displayName === selectedName) opt.selected = true;
+    return opt;
+  });
+
+  if (!options.some((opt) => opt.selected) && options[0]) {
+    options[0].selected = true;
+  }
+
+  return options;
+}
+
+function computeSuggestedSlot(data, existingSlots) {
+  const rotation = data?.rotation ?? [];
+  if (!rotation.length) {
+    return null;
+  }
+
+  let lastDate = data?.latestDate || null;
+  let lastPicker = data?.latestPickerName || null;
+
+  for (const slot of existingSlots) {
+    if (slot.watchDate && (!lastDate || slot.watchDate > lastDate)) {
+      lastDate = slot.watchDate;
+      lastPicker = slot.pickerDisplayName || lastPicker;
+    }
+  }
+
+  if (!lastDate) {
+    lastDate = new Date().toISOString().slice(0, 10);
+  }
+
+  const nextDate = suggestNextThursday(lastDate);
+  const lastIdx = lastPicker ? rotation.findIndex((m) => m.displayName === lastPicker) : -1;
+  const nextPicker = rotation[(lastIdx + 1) % rotation.length];
+
+  return {
+    weekKey: null,
+    watchDate: nextDate,
+    pickerDisplayName: nextPicker?.displayName || rotation[0].displayName,
+    isSuggested: true
+  };
+}
+
+function renderScheduleRows(slots, rotation, suggestion) {
+  if (!scheduleList) return;
+  const allRows = [...slots];
+  if (suggestion) {
+    allRows.push(suggestion);
+  }
+
+  if (!allRows.length) {
+    window.filmCrew.setMutedMessage(scheduleList, "No upcoming screenings scheduled.");
+    return;
+  }
+
+  const rows = allRows.map((slot) => {
+    const row = cloneTemplate("schedule-row-tpl");
+    if (slot.weekKey) {
+      row.dataset.weekKey = slot.weekKey;
+    }
+    if (slot.isSuggested) {
+      row.dataset.suggested = "true";
+    }
+
+    const dateInput = row.querySelector(".schedule-date-input");
+    dateInput.value = slot.watchDate;
+
+    const pickerSelect = row.querySelector(".schedule-picker-select");
+    pickerSelect.replaceChildren(...buildPickerOptions(rotation, slot.pickerDisplayName));
+
+    const actionBtn = row.querySelector("[data-action]");
+    if (slot.isSuggested) {
+      actionBtn.dataset.action = "add-slot";
+      actionBtn.textContent = "Add";
+      actionBtn.classList.remove("secondary");
+      actionBtn.classList.add("primary", "schedule-add-btn");
+    } else {
+      const initialDate = slot.watchDate || "";
+      const initialPicker = slot.pickerDisplayName || pickerSelect.value || "";
+
+      const updateSaveVisibility = () => {
+        const isDirty = dateInput.value !== initialDate || pickerSelect.value !== initialPicker;
+        actionBtn.classList.toggle("hidden", !isDirty);
+      };
+
+      actionBtn.classList.add("hidden");
+      dateInput.addEventListener("input", updateSaveVisibility);
+      pickerSelect.addEventListener("change", updateSaveVisibility);
+    }
+
+    return row;
+  });
+
+  scheduleList.replaceChildren(...rows);
+}
+
+async function loadSchedule() {
+  if (!scheduleList) return;
+  try {
+    scheduleData = await window.filmCrew.fetchJson("/api/schedule");
+    suggestedSlot = computeSuggestedSlot(scheduleData, scheduleData.slots || []);
+    renderScheduleRows(scheduleData.slots || [], scheduleData.rotation || [], suggestedSlot);
+  } catch {
+    window.filmCrew.setMutedMessage(scheduleList, "Could not load schedule.");
+  }
+}
+
+scheduleList?.addEventListener("click", async (event) => {
+  const btn = event.target.closest("[data-action]");
+  if (!btn) return;
+
+  const row = btn.closest(".schedule-row");
+  if (!row) return;
+
+  const action = btn.dataset.action;
+  const rotation = scheduleData?.rotation ?? [];
+
+  if (action === "save-slot" || action === "add-slot") {
+    const dateInput = row.querySelector(".schedule-date-input");
+    const pickerSelect = row.querySelector(".schedule-picker-select");
+    if (!dateInput.reportValidity()) return;
+
+    btn.disabled = true;
+    if (scheduleMessage) scheduleMessage.textContent = "Saving…";
+    try {
+      const { slots } = await window.filmCrew.fetchJson("/api/schedule", {
+        method: "PUT",
+        body: JSON.stringify({
+          weekKey: action === "add-slot" ? null : (row.dataset.weekKey || null),
+          watchDate: dateInput.value,
+          pickerDisplayName: pickerSelect.value || null
+        })
+      });
+      scheduleData = { ...scheduleData, slots };
+      suggestedSlot = computeSuggestedSlot(scheduleData, slots || []);
+      renderScheduleRows(slots || [], rotation, suggestedSlot);
+      if (scheduleMessage) scheduleMessage.textContent = action === "add-slot" ? "Added." : "Saved.";
+    } catch (err) {
+      if (scheduleMessage) scheduleMessage.textContent = err.message || (action === "add-slot" ? "Could not add." : "Could not save.");
+      btn.disabled = false;
+    }
+    return;
+  }
+});

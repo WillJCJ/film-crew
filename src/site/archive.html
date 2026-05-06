@@ -5,16 +5,29 @@ title: Archive | Film Crew
 pageScript: /assets/archive.js
 ---
 
-<template id="screening-card-tpl">
-  <article class="card">
-    <img class="poster" data-bind="poster" alt="" hidden>
-    <p class="eyebrow" data-bind="weekKey"></p>
-    <h3><span data-bind="title"></span> <span class="muted" data-bind="yearGroup"></span></h3>
-    <p class="muted" data-bind="chooserLine"></p>
-    <p data-bind="plot"></p>
-    <p><strong data-bind="score"></strong><span data-bind="ratingCount"></span></p>
-  </article>
+<template id="archive-row-tpl">
+  <li class="archive-row">
+    <details>
+      <summary class="archive-row-summary">
+        <span class="archive-row-title">
+          <span data-bind="title"></span>
+          <span class="muted archive-row-year" data-bind="year"></span>
+        </span>
+        <span class="archive-row-chooser muted" data-bind="chooser"></span>
+        <span class="archive-row-date muted" data-bind="date"></span>
+        <strong class="archive-row-score" data-bind="score"></strong>
+      </summary>
+      <div class="archive-row-body">
+        <img class="archive-row-poster" data-bind="poster" alt="" hidden>
+        <div class="archive-row-body-text">
+          <p data-bind="plot"></p>
+          <a class="button primary" data-bind="detailLink">Full details</a>
+        </div>
+      </div>
+    </details>
+  </li>
 </template>
+
 <section class="panel">
   <div class="section-heading">
     <div>
@@ -22,7 +35,7 @@ pageScript: /assets/archive.js
       <h1>Previous screenings</h1>
     </div>
   </div>
-  <div id="archive-list" class="cards-grid wide">
-    <p class="muted">Loading archive…</p>
-  </div>
+  <ul id="archive-list" class="archive-list">
+    <li><p class="muted">Loading archive…</p></li>
+  </ul>
 </section>

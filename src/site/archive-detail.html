@@ -8,7 +8,6 @@ pageScript: /assets/archive-detail.js
   <div class="section-heading">
     <div>
       <p class="eyebrow">Archive</p>
-      <h1 id="detail-title">Screening detail</h1>
     </div>
     <div class="section-actions">
       <button id="refresh-omdb" class="button secondary" type="button">Refresh from OMDb</button>
@@ -18,11 +17,17 @@ pageScript: /assets/archive-detail.js
   <div id="archive-detail-content" class="content-grid">
     <p class="muted">Loading screening…</p>
   </div>
-  <form id="edit-imdb-form" class="inline-form">
-    <label for="edit-imdb-id">Change IMDb ID</label>
-    <input id="edit-imdb-id" name="imdbId" type="text" placeholder="tt1234567" pattern="tt\d+" required>
-    <button type="submit" class="button secondary">Save</button>
-    <p id="edit-imdb-message" class="form-message"></p>
+  <form id="detail-rating-form" class="stack-form">
+    <label>
+      <span>Your score</span>
+      <input type="text" name="score" inputmode="decimal" placeholder="e.g. 7.5">
+    </label>
+    <label>
+      <span>Your review</span>
+      <textarea name="review" rows="4" placeholder="Optional thoughts."></textarea>
+    </label>
+    <button class="button primary" type="submit">Save rating</button>
+    <p id="detail-rating-message" class="form-message"></p>
   </form>
 </section>
 
@@ -49,7 +54,13 @@ pageScript: /assets/archive-detail.js
 
 <template id="rating-item-tpl">
   <article class="rating-item">
-    <strong data-bind="summary"></strong>
+    <div class="rating-item-head">
+      <strong data-bind="summary"></strong>
+      <div class="rating-actions authed-only hidden" data-bind="actions">
+        <button class="rating-remove-x" type="button" data-action="prompt-remove-rating" aria-label="Remove your rating">&#10005;</button>
+        <button class="button secondary compact hidden" type="button" data-action="confirm-remove-rating">Are you sure?</button>
+      </div>
+    </div>
     <p data-bind="review"></p>
   </article>
 </template>
