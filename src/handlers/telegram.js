@@ -1,6 +1,8 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { json } from "../lib/http.js";
 import { listScreenings, getCurrentScreening, getScreeningById } from "../lib/db/screenings.js";
+import { listSchedule } from "../lib/db/schedule.js";
+import { searchOmdb, ensureFilmByImdbId } from "../lib/omdb.js";
 
 async function findTelegramMember(db, username) {
   return db.prepare(
@@ -33,13 +35,16 @@ function buildBot(env) {
     await ctx.reply(
       "Film Crew Bot\n\n" +
       "/rate - rate the last screening\n" +
-      "/show picks|pick <name>\n\n" +
-      "To add a pick, use the dashboard."
+      "/schedule - view upcoming screenings\n" +
+      "/pick <movie name> - set your film pick\n" +
+      "/show picks|pick <name>"
     );
   });
 
   bot.command("rate", async (ctx) => startRate(ctx, env));
   bot.command("show", async (ctx) => handleShow(ctx, env));
+  bot.command("schedule", async (ctx) => handleSchedule(ctx, env));
+  bot.command("pick", async (ctx) => handlePick(ctx, env));
 
   bot.on("callback_query:data", async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -132,8 +137,20 @@ async function handleShow(ctx, env) {
 
 async function handleCallback(ctx, env) {
   const data = String(ctx.callbackQuery.data || "");
-  if (!data.startsWith("rate:")) return;
+  if (data.startsWith("rate:")) {
+    await handleRateCallback(ctx, env, data);
+  } else if (data.startsWith("pick_film:")) {
+    await handlePickFilmCallback(ctx, env, data);
+  } else if (data.startsWith("pick_date:") || data.startsWith("pick_confirm:")) {
+    await handlePickDateCallback(ctx, env, data);
+  } else if (data === "pick_cancel") {
+    const chatId = String(ctx.chat?.id ?? ctx.from?.id);
+    if (env.BOT_KV) await env.BOT_KV.delete(`pick:${chatId}`);
+    await ctx.editMessageText("Pick cancelled.");
+  }
+}
 
+async function handleRateCallback(ctx, env, data) {
   const [, weekKey, scoreStr] = data.split(":");
   const score = parseFloat(scoreStr);
   const username = ctx.from?.username || ctx.from?.first_name || "";
@@ -161,6 +178,181 @@ async function handleCallback(ctx, env) {
   } catch (error) {
     await ctx.editMessageText(`Couldn't save rating: ${error.message}`);
   }
+}
+
+// ── /schedule command ─────────────────────────────────────────────────────────
+
+async function handleSchedule(ctx, env) {
+  const slots = await listSchedule(env.DB).catch(() => []);
+  if (!slots.length) {
+    return ctx.reply("No upcoming screenings scheduled.");
+  }
+  const lines = ["*Upcoming screenings*\n"];
+  for (const s of slots) {
+    const film = s.filmTitle ? `*${s.filmTitle}*` : "TBC";
+    const picker = s.pickerDisplayName || "TBC";
+    lines.push(`${s.watchDate} — ${picker} — ${film}`);
+  }
+  return ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
+}
+
+// ── /pick command ─────────────────────────────────────────────────────────────
+
+async function handlePick(ctx, env) {
+  const username = ctx.from?.username || ctx.from?.first_name || "";
+  const member = await findTelegramMember(env.DB, username).catch(() => null);
+  if (!member) {
+    return ctx.reply(`@${username} - you're not in the members list. Ask an admin to add your Telegram username.`);
+  }
+
+  const query = ctx.message.text.split(" ").slice(1).join(" ").trim();
+  if (!query) {
+    return ctx.reply("Usage: /pick <movie name>");
+  }
+
+  const results = await searchOmdb(env, query).catch(() => []);
+  if (!results.length) {
+    return ctx.reply(`No films found for "${query}". Try a different search.`);
+  }
+
+  const chatId = String(ctx.chat?.id ?? ctx.from?.id);
+  const top = results.slice(0, 3);
+
+  if (top.length === 1) {
+    return sendDateSelection(ctx, env, chatId, member.displayName, top[0], false);
+  }
+
+  // Multiple results — ask which film they meant
+  const state = {
+    step: "await_film",
+    memberDisplayName: member.displayName,
+    options: top.map((r) => ({ imdbId: r.imdbId, title: r.title, year: r.year || "" }))
+  };
+  if (env.BOT_KV) {
+    await env.BOT_KV.put(`pick:${chatId}`, JSON.stringify(state), { expirationTtl: 600 });
+  }
+
+  const keyboard = new InlineKeyboard();
+  top.forEach((r) => {
+    keyboard.row(InlineKeyboard.text(`${r.title} (${r.year || "?"})`, `pick_film:${r.imdbId}`));
+  });
+  keyboard.row(InlineKeyboard.text("Cancel", "pick_cancel"));
+
+  return ctx.reply(`Found ${top.length} films. Which did you mean?`, { reply_markup: keyboard });
+}
+
+async function handlePickFilmCallback(ctx, env, data) {
+  const imdbId = data.slice("pick_film:".length);
+  const chatId = String(ctx.chat?.id ?? ctx.from?.id);
+
+  if (!env.BOT_KV) {
+    return ctx.editMessageText("Bot state storage is not configured.");
+  }
+
+  const raw = await env.BOT_KV.get(`pick:${chatId}`);
+  if (!raw) {
+    return ctx.editMessageText("This pick session has expired. Start again with /pick.");
+  }
+
+  const state = JSON.parse(raw);
+  const username = ctx.from?.username || ctx.from?.first_name || "";
+  const member = await findTelegramMember(env.DB, username).catch(() => null);
+  if (!member || member.displayName !== state.memberDisplayName) {
+    return; // silently ignore — not the session owner
+  }
+
+  const film = state.options?.find((o) => o.imdbId === imdbId) ?? { imdbId, title: imdbId, year: "" };
+  return sendDateSelection(ctx, env, chatId, state.memberDisplayName, film, true);
+}
+
+async function handlePickDateCallback(ctx, env, data) {
+  const weekKey = data.replace(/^pick_(date|confirm):/, "");
+  const chatId = String(ctx.chat?.id ?? ctx.from?.id);
+
+  if (!env.BOT_KV) {
+    return ctx.editMessageText("Bot state storage is not configured.");
+  }
+
+  const raw = await env.BOT_KV.get(`pick:${chatId}`);
+  if (!raw) {
+    return ctx.editMessageText("This pick session has expired. Start again with /pick.");
+  }
+
+  const state = JSON.parse(raw);
+
+  const filmId = await ensureFilmByImdbId(env, state.imdbId).catch(() => null);
+  if (!filmId) {
+    await env.BOT_KV.delete(`pick:${chatId}`);
+    return ctx.editMessageText("Couldn't import that film from OMDb. Please try again with /pick.");
+  }
+
+  try {
+    await env.DB.prepare(
+      "UPDATE weekly_screenings SET film_id = ?, updated_at = CURRENT_TIMESTAMP WHERE week_key = ?"
+    ).bind(filmId, weekKey).run();
+  } catch (error) {
+    await env.BOT_KV.delete(`pick:${chatId}`);
+    return ctx.editMessageText(`Couldn't save pick: ${error.message}`);
+  }
+
+  await env.BOT_KV.delete(`pick:${chatId}`);
+
+  const screening = await getScreeningById(env.DB, weekKey).catch(() => null);
+  const title = screening?.film?.title ?? state.filmTitle;
+  const date = screening?.watchDate ?? weekKey;
+
+  return ctx.editMessageText(
+    `*${state.memberDisplayName}* picked *${title}* for ${date}`,
+    { parse_mode: "Markdown" }
+  );
+}
+
+// ── Pick helper: present date selection ──────────────────────────────────────
+
+async function sendDateSelection(ctx, env, chatId, memberDisplayName, film, isEdit) {
+  const slots = await listSchedule(env.DB);
+  const mySlots = slots.filter((s) => s.pickerDisplayName === memberDisplayName);
+
+  const send = (text, opts) =>
+    isEdit ? ctx.editMessageText(text, opts) : ctx.reply(text, opts);
+
+  if (!mySlots.length) {
+    if (env.BOT_KV) await env.BOT_KV.delete(`pick:${chatId}`);
+    return send("You have no upcoming screenings. Ask an admin to add you to the schedule.");
+  }
+
+  const state = {
+    step: "await_date",
+    memberDisplayName,
+    imdbId: film.imdbId,
+    filmTitle: film.title,
+    filmYear: film.year || ""
+  };
+  if (env.BOT_KV) {
+    await env.BOT_KV.put(`pick:${chatId}`, JSON.stringify(state), { expirationTtl: 600 });
+  }
+
+  if (mySlots.length === 1) {
+    const slot = mySlots[0];
+    const keyboard = new InlineKeyboard()
+      .row(InlineKeyboard.text(`Yes — ${slot.watchDate}`, `pick_confirm:${slot.weekKey}`))
+      .row(InlineKeyboard.text("Cancel", "pick_cancel"));
+    return send(
+      `Set *${film.title}* (${film.year || "?"}) for your screening on *${slot.watchDate}*?`,
+      { parse_mode: "Markdown", reply_markup: keyboard }
+    );
+  }
+
+  const keyboard = new InlineKeyboard();
+  mySlots.forEach((s) => {
+    keyboard.row(InlineKeyboard.text(s.watchDate, `pick_date:${s.weekKey}`));
+  });
+  keyboard.row(InlineKeyboard.text("Cancel", "pick_cancel"));
+
+  return send(
+    `You have ${mySlots.length} upcoming screenings. Which date for *${film.title}*?`,
+    { parse_mode: "Markdown", reply_markup: keyboard }
+  );
 }
 
 // ── Webhook entrypoint ────────────────────────────────────────────────────────

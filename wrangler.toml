@@ -27,3 +27,7 @@ binding = "DB"
 database_name = "film-crew"
 database_id = "52d527f7-60aa-4b53-b17d-f3bfcfc93795"
 migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "BOT_KV"
+id = "7ed27364e42c4a0aabd7818e224b66ef"

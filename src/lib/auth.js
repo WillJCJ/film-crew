@@ -66,7 +66,8 @@ export async function extractMemberFromAuth(request, env) {
     displayName: member.displayName,
     isAdmin: Boolean(member.isAdmin),
     profileColor: member.profileColor,
-    profileEmoji: member.profileEmoji
+    profileEmoji: member.profileEmoji,
+    telegramUsername: member.telegramUsername ?? null
   };
 }
 

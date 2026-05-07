@@ -10,7 +10,8 @@ import {
   handlePickerCreateScreening,
   handleDeleteOwnRating,
   handleUpsertRating,
-  handleUpdateScreeningFilm
+  handleUpdateScreeningFilm,
+  handleDeleteScreening
 } from "./handlers/screenings.js";
 import { handleGetFilmOmdb, handleRefreshFilmOmdb, handleRefreshAllFilms } from "./handlers/films.js";
 import { handleGetRotation, handleUpdateScreeningDay, handleUpdateRotation } from "./handlers/rotation.js";
@@ -111,6 +112,15 @@ app.delete("/api/screenings/:weekKey/ratings", async (c) => {
   return handleDeleteOwnRating(c.env, member, c.req.param("weekKey"));
 });
 
+app.get("/api/films/search", async (c) => {
+  await extractMemberFromAuth(c.req.raw, c.env);
+  const query = c.req.query("q")?.trim();
+  if (!query) {
+    return json({ error: "invalid_request", message: "Query is required." }, 400);
+  }
+  return json({ results: await searchOmdb(c.env, query) });
+});
+
 app.get("/api/films/:imdbId/omdb", async (c) => {
   await extractMemberFromAuth(c.req.raw, c.env);
   return handleGetFilmOmdb(c.env, c.req.param("imdbId"));
@@ -130,6 +140,12 @@ app.post("/api/admin/films/refresh-all", async (c) => {
 app.patch("/api/admin/screenings/:weekKey/film", async (c) => {
   const member = await extractMemberFromAuth(c.req.raw, c.env);
   return handleUpdateScreeningFilm(c.req.raw, c.env, member, c.req.param("weekKey"));
+});
+
+app.delete("/api/admin/screenings/:weekKey", async (c) => {
+  const member = await extractMemberFromAuth(c.req.raw, c.env);
+  await requireAdmin(c.env.DB, member);
+  return handleDeleteScreening(c.env, c.req.param("weekKey"));
 });
 
 app.get("/api/admin/film-search", async (c) => {
@@ -167,6 +183,11 @@ app.get("*", async (c) => {
   const assetResponse = await c.env.ASSETS.fetch(assetRequest);
   const contentType = assetResponse.headers.get("content-type") || "";
   if (!contentType.includes("text/html")) {
+    return assetResponse;
+  }
+
+  // Null-body statuses must be passed through as-is; reading their body is invalid.
+  if (assetResponse.status === 304 || assetResponse.status === 204) {
     return assetResponse;
   }
 

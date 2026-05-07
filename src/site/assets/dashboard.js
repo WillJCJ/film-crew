@@ -598,6 +598,18 @@ function renderScheduleRows(slots, rotation, suggestion) {
     const dateInput = row.querySelector(".schedule-date-input");
     dateInput.value = slot.watchDate;
 
+    const filmLink = row.querySelector("[data-bind='filmLink']");
+    if (filmLink) {
+      filmLink.textContent = slot.filmTitle || "TBC";
+      if (slot.weekKey) {
+        filmLink.href = `/archive/${slot.weekKey}`;
+      } else {
+        filmLink.textContent = "Suggested Date";
+        filmLink.removeAttribute("href");
+      }
+      filmLink.hidden = false;
+    }
+
     const pickerSelect = row.querySelector(".schedule-picker-select");
     pickerSelect.replaceChildren(...buildPickerOptions(rotation, slot.pickerDisplayName));
 

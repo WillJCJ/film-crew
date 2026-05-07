@@ -151,6 +151,22 @@ export async function handleDeleteOwnRating(env, member, weekKey) {
   return json({ screening: updatedScreening });
 }
 
+export async function handleDeleteScreening(env, weekKey) {
+  const row = await env.DB.prepare("SELECT week_key FROM weekly_screenings WHERE week_key = ? LIMIT 1")
+    .bind(weekKey)
+    .first();
+
+  if (!row) {
+    return json({ error: "not_found", message: "Screening not found." }, 404);
+  }
+
+  await env.DB.prepare("DELETE FROM weekly_screenings WHERE week_key = ?")
+    .bind(weekKey)
+    .run();
+
+  return json({ deleted: weekKey });
+}
+
 export async function handleUpdateScreeningFilm(request, env, member, weekKey) {
   const body = await readJson(request);
   const imdbId = String(body.imdbId || "").trim();

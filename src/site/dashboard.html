@@ -191,6 +191,7 @@ pageScript: /assets/dashboard.js
 
 <template id="schedule-row-tpl">
   <div class="schedule-row">
+    <a class="schedule-row-film-link" data-bind="filmLink" hidden></a>
     <input type="date" class="schedule-date-input" aria-label="Watch date" required>
     <select class="schedule-picker-select" aria-label="Picker"></select>
     <div class="schedule-row-actions">

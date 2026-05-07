@@ -689,32 +689,43 @@ fieldset {
 .schedule-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
 }
 
 .schedule-row:first-child {
   border-top: 1px solid var(--line);
 }
 
-.schedule-date-input {
-  flex: 0 0 auto;
-  width: auto;
+.schedule-row-film-link {
+  flex: 0 0 40%;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.schedule-date-input {
+  flex: 0 0 25%;
+  min-width: 0;
+  width: auto;
+  padding-right: 8px;
 }
 
 .schedule-picker-select {
-  flex: 1 1 auto;
-  min-width: 120px;
+  flex: 0 0 15%;
+  min-width: 0;
   width: auto;
+  padding-right: 8px;
 }
 
 .schedule-row-actions {
+  flex: 0 0 20%;
   display: inline-flex;
   gap: 6px;
-  flex-shrink: 0;
+  justify-content: flex-end;
 }
 
 .schedule-add-btn {
