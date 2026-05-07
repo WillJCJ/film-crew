@@ -135,6 +135,7 @@ VALUES ('new@example.com', 'New Person', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 - Split up large worker.js into managable files
 - Stats page
 - Shortlist of film picks
+  - Personal watch list
 - Allow guest profiles and ratings
 - Filter/search archive
 - enrich existing films with OMDB/IMDB data

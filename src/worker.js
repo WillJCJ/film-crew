@@ -16,6 +16,7 @@ import { handleGetFilmOmdb, handleRefreshFilmOmdb, handleRefreshAllFilms } from 
 import { handleGetRotation, handleUpdateScreeningDay, handleUpdateRotation } from "./handlers/rotation.js";
 import { handleGetSchedule, handleUpsertScheduleSlot } from "./handlers/schedule.js";
 import { handleGetStats } from "./handlers/stats.js";
+import { toWeekKey } from "./lib/date.js";
 
 const app = new Hono();
 
@@ -156,24 +157,15 @@ function botAuth(c) {
   }
 }
 
-function isoWeekKey(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const year = d.getFullYear();
-  const week = Math.ceil(((d - new Date(year, 0, 1)) / 86400000 + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-}
-
 // Resolve telegram username → member
 app.get("/api/bot/members/by-telegram/:username", async (c) => {
   const err = botAuth(c);
   if (err) return err;
-  const member = await c.env.DB.prepare(
-      "SELECT display_name, email, is_admin FROM members WHERE telegram_username = ?"
+  const row = await c.env.DB.prepare(
+    "SELECT display_name AS displayName, email, is_admin AS isAdmin FROM members WHERE telegram_username = ?"
   ).bind(c.req.param("username")).first();
-  if (!member) return c.json({ error: "not_found" }, 404);
-  return c.json(member);
+  if (!row) return c.json({ error: "not_found" }, 404);
+  return c.json(row);
 });
 
 // All screenings (reuses existing listScreenings which queries v_screening_summary)
@@ -221,8 +213,8 @@ app.post("/api/bot/screenings", async (c) => {
     film = { id: result.meta.last_row_id };
   }
 
-  const weekKey = (watch_date && watch_date !== "TBD")
-      ? isoWeekKey(new Date(watch_date))
+    const weekKey = (watch_date && watch_date !== "TBD")
+      ? toWeekKey(watch_date)
       : `bot-${Date.now()}`;
 
   await c.env.DB.prepare(
@@ -250,36 +242,6 @@ app.post("/api/bot/ratings", async (c) => {
   ).bind(week_key).first();
 
   return c.json({ avg_score: avg.avg_score });
-});
-
-// Watchlist
-app.get("/api/bot/watchlist", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const { results } = await c.env.DB.prepare(
-      "SELECT title, added_by FROM watchlist ORDER BY added_at ASC"
-  ).all();
-  return c.json(results);
-});
-
-app.post("/api/bot/watchlist", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const { title, added_by } = await c.req.json();
-  await c.env.DB.prepare(
-      "INSERT OR IGNORE INTO watchlist (title, added_by) VALUES (?, ?)"
-  ).bind(title, added_by).run();
-  return c.json({ ok: true });
-});
-
-app.delete("/api/bot/watchlist/:title", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const title = decodeURIComponent(c.req.param("title"));
-  const result = await c.env.DB.prepare(
-      "DELETE FROM watchlist WHERE LOWER(title) = LOWER(?)"
-  ).bind(title).run();
-  return c.json({ removed: result.meta.changes > 0 });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

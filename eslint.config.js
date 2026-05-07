@@ -20,6 +20,14 @@ export default [
     }
   },
   {
+    files: ["bot/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker
+      }
+    }
+  },
+  {
     files: ["eleventy.config.js", "worker/tests/**/*.js"],
     languageOptions: {
       globals: {

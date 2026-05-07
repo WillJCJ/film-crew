@@ -66,9 +66,8 @@ async function api(env, method, path, body) {
   return res.json();
 }
 
-const GET    = (env, path)        => api(env, "GET",    path);
-const POST   = (env, path, body)  => api(env, "POST",   path, body);
-const DELETE = (env, path)        => api(env, "DELETE", path);
+const GET  = (env, path)       => api(env, "GET",  path);
+const POST = (env, path, body) => api(env, "POST", path, body);
 
 
 // ── In-memory conversation state ──────────────────────────────────────────────
@@ -104,15 +103,13 @@ async function handleMessage(msg, env) {
   switch (cmd) {
     case "/pick":       return startPick(chatId, telegramUsername, env);
     case "/rate":       return startRate(chatId, telegramUsername, args, env);
-    case "/watchlist":  return handleWatchlist(chatId, telegramUsername, args, env);
     case "/show":       return handleShow(chatId, args, env);
     default:
       if (text.startsWith("/")) await send(env, chatId,
         "🎬 *Film Crew Bot*\n\n" +
         "/pick — choose next film\n" +
         "/rate — rate the last screening\n" +
-        "/watchlist add\\|remove <film>\n" +
-        "/show picks\\|watchlist\\|pick <name>"
+        "/show picks|pick <name>"
       );
   }
 }
@@ -126,7 +123,7 @@ async function startPick(chatId, telegramUsername, env) {
   try { member = await GET(env, `/members/by-telegram/${telegramUsername}`); }
   catch { return send(env, chatId, `@${telegramUsername} — you're not in the members list. Ask an admin to add your Telegram username.`); }
 
-  setState(chatId, { step: "pick:film", data: { telegramUsername, displayName: member.display_name } });
+  setState(chatId, { step: "pick:film", data: { telegramUsername, displayName: member.displayName } });
   await send(env, chatId, "🎬 What film are you picking?");
 }
 
@@ -153,11 +150,11 @@ async function startRate(chatId, telegramUsername, args, env) {
     try {
       const result = await POST(env, "/ratings", {
         week_key: screening.weekKey,
-        display_name: member.display_name,
+        display_name: member.displayName,
         score
       });
       return send(env, chatId,
-        `⭐ *${member.display_name}* gave *${screening.title}* ${score}/10\n` +
+        `⭐ *${member.displayName}* gave *${screening.title}* ${score}/10\n` +
         `Group average: ⭐ ${result.avg_score}/10`
       );
     } catch (e) {
@@ -171,38 +168,6 @@ async function startRate(chatId, telegramUsername, args, env) {
     [6,7,8,9,10].map(i => ({ text: `${i}`, callback_data: `rate:${screening.weekKey}:${i}` })),
   ];
   await send(env, chatId, `⭐ Rate *${screening.title}*:`, keyboard(rows));
-}
-
-
-// ── /watchlist ────────────────────────────────────────────────────────────────
-
-async function handleWatchlist(chatId, telegramUsername, args, env) {
-  const action = (args[0] || "").toLowerCase();
-  const title  = args.slice(1).join(" ").trim();
-
-  if (!action) {
-    const films = await GET(env, "/watchlist");
-    if (!films.length) return send(env, chatId, "Watchlist is empty. Try `/watchlist add Dune`");
-    const lines = ["📋 *Watchlist*\n", ...films.map(f => `• *${f.title}* — added by ${f.added_by}`)];
-    return send(env, chatId, lines.join("\n"));
-  }
-
-  if (action === "add") {
-    if (!title) return send(env, chatId, "Usage: `/watchlist add <film name>`");
-    let member;
-    try { member = await GET(env, `/members/by-telegram/${telegramUsername}`); }
-    catch { return send(env, chatId, `@${telegramUsername} — you're not in the members list.`); }
-    await POST(env, "/watchlist", { title, added_by: member.display_name });
-    return send(env, chatId, `✅ *${title}* added to the watchlist.`);
-  }
-
-  if (action === "remove") {
-    if (!title) return send(env, chatId, "Usage: `/watchlist remove <film name>`");
-    const result = await DELETE(env, `/watchlist/${encodeURIComponent(title)}`);
-    return send(env, chatId, result.removed ? `🗑 *${title}* removed.` : `Couldn't find *${title}* in the watchlist.`);
-  }
-
-  await send(env, chatId, "Usage: `/watchlist` · `/watchlist add <film>` · `/watchlist remove <film>`");
 }
 
 
@@ -223,13 +188,6 @@ async function handleShow(chatId, args, env) {
     return send(env, chatId, lines.join("\n"));
   }
 
-  if (sub === "watchlist") {
-    const films = await GET(env, "/watchlist");
-    if (!films.length) return send(env, chatId, "Watchlist is empty.");
-    const lines = ["📋 *Watchlist*\n", ...films.map(f => `• *${f.title}* — added by ${f.added_by}`)];
-    return send(env, chatId, lines.join("\n"));
-  }
-
   if (sub === "pick") {
     const name = args.slice(1).join(" ").replace(/^@/, "").trim();
     if (!name) return send(env, chatId, "Usage: `/show pick <name>`");
@@ -242,7 +200,7 @@ async function handleShow(chatId, args, env) {
     return send(env, chatId, lines.join("\n"));
   }
 
-  await send(env, chatId, "Try: `/show picks` · `/show watchlist` · `/show pick <name>`");
+  await send(env, chatId, "Try: `/show picks` · `/show pick <name>`");
 }
 
 
@@ -289,11 +247,11 @@ async function handleCallback(query, env) {
     try {
       const result = await POST(env, "/ratings", {
         week_key: weekKey,
-        display_name: member.display_name,
+        display_name: member.displayName,
         score
       });
       await edit(env, chatId, messageId,
-        `⭐ *${member.display_name}* gave it ${score}/10\n` +
+        `⭐ *${member.displayName}* gave it ${score}/10\n` +
         `Group average: ⭐ ${result.avg_score}/10`
       );
     } catch (e) {

@@ -165,6 +165,11 @@ function hydrateProfileForm(member) {
   emojiInput.value = member.profileEmoji || "🎬";
   validateEmojiInput(emojiInput);
   initColourPicker(dotButton, colourInput, colourInput.value);
+
+  const telegramInput = profileForm.elements.telegramUsername;
+  if (telegramInput) {
+    telegramInput.value = member.telegramUsername || "";
+  }
 }
 
 async function populateMemberOptions() {
@@ -222,7 +227,8 @@ profileForm?.addEventListener("submit", async (event) => {
       method: "PUT",
       body: JSON.stringify({
         profileColor: profileForm.elements.profileColor.value,
-        profileEmoji: profileForm.elements.profileEmoji.value
+        profileEmoji: profileForm.elements.profileEmoji.value,
+        telegramUsername: profileForm.elements.telegramUsername?.value ?? ""
       })
     });
 

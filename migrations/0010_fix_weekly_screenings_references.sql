@@ -46,6 +46,8 @@ FROM ratings_old;
 
 DROP TABLE ratings_old;
 
+DROP TABLE IF EXISTS weekly_screenings_old;
+
 CREATE VIEW IF NOT EXISTS v_screening_summary AS
   SELECT
     ws.week_key AS weekKey,
