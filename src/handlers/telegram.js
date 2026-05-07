@@ -183,16 +183,26 @@ async function handleRateCallback(ctx, env, data) {
 // ── /schedule command ─────────────────────────────────────────────────────────
 
 async function handleSchedule(ctx, env) {
-  const slots = await listSchedule(env.DB).catch(() => []);
-  if (!slots.length) {
+  const today = new Date().toISOString().slice(0, 10);
+  const screenings = await listScreenings(env.DB).catch(() => []);
+  const upcoming = screenings
+    .filter((s) => s.watchDate && s.watchDate >= today)
+    .sort((a, b) => {
+      return a.watchDate.localeCompare(b.watchDate);
+    });
+
+  if (!upcoming.length) {
     return ctx.reply("No upcoming screenings scheduled.");
   }
+
   const lines = ["*Upcoming screenings*\n"];
-  for (const s of slots) {
-    const film = s.filmTitle ? `*${s.filmTitle}*` : "TBC";
-    const picker = s.pickerDisplayName || "TBC";
-    lines.push(`${s.watchDate} — ${picker} — ${film}`);
+  for (const s of upcoming) {
+    const film = s.film?.title ? `*${s.film.title}*` : "TBC";
+    const picker = s.chooser?.name || "TBC";
+    const date = s.watchDate || "TBD";
+    lines.push(`${date} — ${picker} — ${film}`);
   }
+
   return ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
 }
 

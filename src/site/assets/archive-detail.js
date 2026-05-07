@@ -257,7 +257,7 @@ async function loadArchiveDetail() {
       selectFilmLink.hidden = hasFilm || !canPickFilm;
     }
     bind(card, "yearGroup").textContent = hasFilm ? `(${screening.film.year || "Unknown year"})` : "";
-    window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening);
+    window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening, { useForFutureDate: true });
 
     const posterEl = bind(card, "poster");
     if (screening.film.posterUrl) {
