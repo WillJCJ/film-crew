@@ -1,9 +1,11 @@
 const contentTarget = document.querySelector("#archive-detail-content");
 const refreshButton = document.querySelector("#refresh-omdb");
+const deleteButton = document.querySelector("#delete-screening");
 const detailRatingForm = document.querySelector("#detail-rating-form");
 const detailRatingMessage = document.querySelector("#detail-rating-message");
 let currentScreening = null;
 let currentMemberName = null;
+let currentMemberIsAdmin = false;
 
 function cloneTemplate(id) {
   return document.getElementById(id).content.cloneNode(true).firstElementChild;
@@ -144,7 +146,85 @@ function getWeekKeyFromPath() {
   return parts.length >= 2 ? parts[1] : "";
 }
 
+function mountFilmPicker() {
+  const panelEl = cloneTemplate("film-picker-panel-tpl");
+  const anchor = document.querySelector("section.panel");
+  if (!anchor) return;
+  anchor.after(panelEl);
+
+  // Query from live DOM now that the panel is inserted.
+  const searchForm = document.getElementById("detail-film-search-form");
+  const searchResults = document.getElementById("detail-film-search-results");
+  const imdbForm = document.getElementById("detail-film-imdb-form");
+  const imdbMessage = document.getElementById("detail-film-imdb-message");
+
+  searchForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = searchForm.elements.query.value.trim();
+    if (!query) return;
+    window.filmCrew.setMutedMessage(searchResults, "Searching…");
+    try {
+      const { results } = await window.filmCrew.fetchJson(`/api/films/search?q=${encodeURIComponent(query)}`);
+      if (!results.length) {
+        window.filmCrew.setMutedMessage(searchResults, "No results found.");
+        return;
+      }
+      const cards = results.map((film) => {
+        const card = cloneTemplate("film-search-card-tpl");
+        const poster = bind(card, "poster");
+        if (film.posterUrl) {
+          poster.src = film.posterUrl;
+          poster.alt = `${film.title} poster`;
+          poster.hidden = false;
+        }
+        bind(card, "title").textContent = film.title;
+        bind(card, "year").textContent = film.year || "";
+        const btn = bind(card, "select");
+        btn.dataset.imdbId = film.imdbId;
+        return card;
+      });
+      window.filmCrew.replaceChildren(searchResults, cards);
+    } catch (error) {
+      window.filmCrew.setMutedMessage(searchResults, error.message);
+    }
+  });
+
+  searchResults?.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-imdb-id]");
+    if (!button || !currentScreening) return;
+    button.disabled = true;
+    try {
+      await setFilmByImdbId(button.dataset.imdbId, imdbMessage);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  imdbForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const imdbId = imdbForm.elements.imdbId.value.trim();
+    if (!imdbId) return;
+    await setFilmByImdbId(imdbId, imdbMessage);
+  });
+}
+
+async function setFilmByImdbId(imdbId, messageEl) {
+  if (!currentScreening) return;
+  if (messageEl) messageEl.textContent = "Saving…";
+  try {
+    await window.filmCrew.fetchJson(`/api/admin/screenings/${currentScreening.weekKey}/film`, {
+      method: "PATCH",
+      body: JSON.stringify({ imdbId })
+    });
+    await loadArchiveDetail();
+  } catch (error) {
+    if (messageEl) messageEl.textContent = error.message || "Could not set film.";
+  }
+}
+
 async function loadArchiveDetail() {
+  // Remove any previously mounted film picker (e.g. after a film is set).
+  document.querySelector(".film-picker-panel")?.remove();
   const weekKey = getWeekKeyFromPath();
   if (!weekKey) {
     window.filmCrew.setMutedMessage(contentTarget, "Missing week key.");
@@ -155,18 +235,29 @@ async function loadArchiveDetail() {
     const { screening } = await window.filmCrew.fetchJson(`/api/screenings/${weekKey}`);
     currentScreening = screening;
     currentMemberName = null;
+    currentMemberIsAdmin = false;
     try {
       const { member } = await window.filmCrew.fetchJson("/api/me");
       currentMemberName = member.displayName;
+      currentMemberIsAdmin = Boolean(member.isAdmin);
     } catch {
       // Not authenticated.
     }
 
+    const hasFilm = Boolean(screening.film?.title);
+    const canPickFilm = Boolean(currentMemberName) &&
+      (currentMemberIsAdmin || screening.chooser?.name === currentMemberName);
+
     const card = cloneTemplate("archive-detail-tpl");
     bind(card, "weekKey").textContent = screening.weekKey;
-    bind(card, "title").textContent = screening.film.title;
-    bind(card, "yearGroup").textContent = `(${screening.film.year || "Unknown year"})`;
-    window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening);
+    const titleEl = bind(card, "title");
+    titleEl.textContent = hasFilm ? screening.film.title : "TBC";
+    const selectFilmLink = bind(card, "selectFilmLink");
+    if (selectFilmLink) {
+      selectFilmLink.hidden = hasFilm || !canPickFilm;
+    }
+    bind(card, "yearGroup").textContent = hasFilm ? `(${screening.film.year || "Unknown year"})` : "";
+    window.filmCrew.renderChooserLine(bind(card, "chooserLine"), screening, { useForFutureDate: true });
 
     const posterEl = bind(card, "poster");
     if (screening.film.posterUrl) {
@@ -176,10 +267,15 @@ async function loadArchiveDetail() {
     }
 
     const metaEl = bind(card, "filmMeta");
-    const metaRows = renderFilmMeta(screening);
-    if (metaRows.length) {
-      metaEl.replaceChildren(...metaRows);
-      metaEl.hidden = false;
+    if (hasFilm) {
+      const metaRows = renderFilmMeta(screening);
+      if (metaRows.length) {
+        metaEl.replaceChildren(...metaRows);
+        metaEl.hidden = false;
+      } else {
+        metaEl.replaceChildren();
+        metaEl.hidden = true;
+      }
     } else {
       metaEl.replaceChildren();
       metaEl.hidden = true;
@@ -194,29 +290,64 @@ async function loadArchiveDetail() {
       notesEl.hidden = true;
     }
 
-    bind(card, "plot").textContent = screening.film.plot || "No plot stored yet.";
+    bind(card, "plot").textContent = hasFilm ? (screening.film.plot || "No plot stored yet.") : "";
 
     const scoreEl = bind(card, "score");
-    scoreEl.textContent = window.filmCrew.formatAverage(screening.averageScore);
-    window.filmCrew.applyScoreBandClass(scoreEl, screening.averageScore);
-    bind(card, "ratingCount").textContent = ` · ${screening.ratingCount} ratings`;
+    scoreEl.textContent = hasFilm ? window.filmCrew.formatAverage(screening.averageScore) : "";
+    if (hasFilm) window.filmCrew.applyScoreBandClass(scoreEl, screening.averageScore);
+    bind(card, "ratingCount").textContent = hasFilm ? ` · ${screening.ratingCount} ratings` : "";
 
-    bind(card, "ratings").replaceChildren(...renderRatings(screening.ratings));
+    bind(card, "ratings").replaceChildren(...(hasFilm ? renderRatings(screening.ratings) : []));
     window.filmCrew.replaceChildren(contentTarget, [card]);
 
     if (detailRatingForm) {
-      detailRatingForm.elements.score.value = "";
-      detailRatingForm.elements.review.value = "";
-      if (currentMemberName) {
-        const existing = screening.ratings.find((rating) => rating.memberName === currentMemberName);
-        detailRatingForm.elements.score.value = existing?.score ?? "";
-        detailRatingForm.elements.review.value = existing?.review || "";
+      if (!hasFilm) {
+        detailRatingForm.hidden = true;
+      } else {
+        detailRatingForm.hidden = false;
+        detailRatingForm.elements.score.value = "";
+        detailRatingForm.elements.review.value = "";
+        if (currentMemberName) {
+          const existing = screening.ratings.find((rating) => rating.memberName === currentMemberName);
+          detailRatingForm.elements.score.value = existing?.score ?? "";
+          detailRatingForm.elements.review.value = existing?.review || "";
+        }
       }
+    }
+
+    if (refreshButton) {
+      refreshButton.hidden = !hasFilm;
+    }
+
+    if (deleteButton) {
+      deleteButton.hidden = !currentMemberIsAdmin;
+    }
+
+    if (!hasFilm && canPickFilm) {
+      mountFilmPicker();
     }
   } catch (error) {
     window.filmCrew.setMutedMessage(contentTarget, error.message || "Could not load screening detail.");
   }
 }
+
+deleteButton?.addEventListener("click", async () => {
+  if (!currentScreening) return;
+  const confirmed = window.confirm(
+    `Delete the screening for ${currentScreening.weekKey}? The film record and all ratings will be kept.`
+  );
+  if (!confirmed) return;
+  deleteButton.disabled = true;
+  try {
+    await window.filmCrew.fetchJson(`/api/admin/screenings/${currentScreening.weekKey}`, {
+      method: "DELETE"
+    });
+    window.location.href = "/archive/";
+  } catch (error) {
+    window.filmCrew.setMutedMessage(contentTarget, error.message || "Could not delete screening.");
+    deleteButton.disabled = false;
+  }
+});
 
 refreshButton?.addEventListener("click", async () => {
   if (!currentScreening?.film?.imdbId) {
@@ -310,9 +441,9 @@ contentTarget?.addEventListener("click", async (event) => {
     }
 
     editButton.disabled = true;
-  if (message) {
-    message.textContent = "Saving…";
-  }
+    if (message) {
+      message.textContent = "Saving…";
+    }
 
     window.filmCrew.fetchJson(`/api/admin/screenings/${currentScreening.weekKey}/film`, {
       method: "PATCH",

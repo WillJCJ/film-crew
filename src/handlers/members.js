@@ -42,9 +42,15 @@ function parseProfileInput(body) {
     throw new HttpError(400, "profileEmoji must be exactly one emoji, with no text.", "invalid_request");
   }
 
+  const rawTelegram = String(body.telegramUsername || "").trim().replace(/^@/, "");
+  if (rawTelegram && !/^[A-Za-z0-9_]{5,32}$/.test(rawTelegram)) {
+    throw new HttpError(400, "telegramUsername must be 5–32 characters (letters, numbers, underscores).", "invalid_request");
+  }
+
   return {
     profileColor: rawColor.toUpperCase(),
-    profileEmoji: rawEmoji
+    profileEmoji: rawEmoji,
+    telegramUsername: rawTelegram || null
   };
 }
 

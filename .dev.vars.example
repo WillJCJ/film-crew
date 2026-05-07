@@ -1,2 +1,4 @@
 OMDB_API_KEY=your-omdb-key
 DEV_AUTH_EMAIL=me@example.com
+BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_WEBHOOK_SECRET=your-webhook-secret-token

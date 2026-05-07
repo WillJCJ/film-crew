@@ -103,7 +103,7 @@ describe("extractMemberFromAuth()", () => {
   });
 
   it("returns shaped member object on success", async () => {
-    const row = { email: "a@b.com", displayName: "Alice", isAdmin: 1, profileColor: "#123456", profileEmoji: "🎥" };
+    const row = { email: "a@b.com", displayName: "Alice", isAdmin: 1, profileColor: "#123456", profileEmoji: "🎥", telegramUsername: "alicebot" };
     const req = makeRequest({ "cf-access-jwt-assertion": fakeJwt({ email: "a@b.com" }) });
     const result = await extractMemberFromAuth(req, { DB: makeDb(row) });
     assert.deepEqual(result, {
@@ -111,7 +111,8 @@ describe("extractMemberFromAuth()", () => {
       displayName: "Alice",
       isAdmin: true,
       profileColor: "#123456",
-      profileEmoji: "🎥"
+      profileEmoji: "🎥",
+      telegramUsername: "alicebot"
     });
   });
 });

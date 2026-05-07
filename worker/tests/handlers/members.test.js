@@ -77,6 +77,59 @@ describe("handleUpdateOwnProfile()", () => {
     );
     assert.equal(res.status, 200);
   });
+
+  it("accepts a valid telegram username", async () => {
+    const updatedRow = { email: "a@b.com", displayName: "Alice", isAdmin: 0, profileColor: "#4A7C59", profileEmoji: "🎬", telegramUsername: "alice_crew" };
+    const res = await handleUpdateOwnProfile(
+      makeRequest({ ...validProfile, telegramUsername: "alice_crew" }),
+      makeDb({ updatedRow }),
+      member
+    );
+    assert.equal(res.status, 200);
+  });
+
+  it("strips leading @ from telegram username", async () => {
+    const updatedRow = { email: "a@b.com", displayName: "Alice", isAdmin: 0, profileColor: "#4A7C59", profileEmoji: "🎬", telegramUsername: "alice_crew" };
+    const res = await handleUpdateOwnProfile(
+      makeRequest({ ...validProfile, telegramUsername: "@alice_crew" }),
+      makeDb({ updatedRow }),
+      member
+    );
+    assert.equal(res.status, 200);
+  });
+
+  it("throws HttpError(400) when telegramUsername is too short", async () => {
+    await assert.rejects(
+      () => handleUpdateOwnProfile(makeRequest({ ...validProfile, telegramUsername: "ab" }), makeDb(), member),
+      (err) => {
+        assert.ok(err instanceof HttpError);
+        assert.equal(err.status, 400);
+        assert.equal(err.code, "invalid_request");
+        return true;
+      }
+    );
+  });
+
+  it("throws HttpError(400) when telegramUsername contains invalid characters", async () => {
+    await assert.rejects(
+      () => handleUpdateOwnProfile(makeRequest({ ...validProfile, telegramUsername: "alice crew!" }), makeDb(), member),
+      (err) => {
+        assert.ok(err instanceof HttpError);
+        assert.equal(err.status, 400);
+        return true;
+      }
+    );
+  });
+
+  it("accepts empty string to clear telegram username", async () => {
+    const updatedRow = { email: "a@b.com", displayName: "Alice", isAdmin: 0, profileColor: "#4A7C59", profileEmoji: "🎬", telegramUsername: null };
+    const res = await handleUpdateOwnProfile(
+      makeRequest({ ...validProfile, telegramUsername: "" }),
+      makeDb({ updatedRow }),
+      member
+    );
+    assert.equal(res.status, 200);
+  });
 });
 
 describe("handleAdminUpdateMemberProfile()", () => {

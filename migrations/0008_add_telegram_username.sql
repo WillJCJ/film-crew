@@ -1,1 +1,0 @@
-ALTER TABLE members ADD COLUMN telegram_username TEXT UNIQUE;

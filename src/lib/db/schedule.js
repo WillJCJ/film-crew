@@ -2,10 +2,12 @@ export async function listSchedule(db) {
   const today = new Date().toISOString().slice(0, 10);
   const result = await db
     .prepare(
-      `SELECT week_key AS weekKey, watch_date AS watchDate, chooser_member_id AS pickerDisplayName
-       FROM weekly_screenings
-       WHERE watch_date >= ?
-       ORDER BY watch_date ASC`
+      `SELECT ws.week_key AS weekKey, ws.watch_date AS watchDate, ws.chooser_member_id AS pickerDisplayName,
+              f.title AS filmTitle
+       FROM weekly_screenings ws
+       LEFT JOIN films f ON f.id = ws.film_id
+       WHERE ws.watch_date >= ?
+       ORDER BY ws.watch_date ASC`
     )
     .bind(today)
     .all();

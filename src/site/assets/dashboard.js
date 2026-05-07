@@ -17,6 +17,7 @@ const rotationList = document.querySelector("#rotation-list");
 const rotationMessage = document.querySelector("#rotation-message");
 
 let rotationData = null;
+let currentMemberIsAdmin = false;
 
 function cloneTemplate(id) {
   return document.getElementById(id).content.cloneNode(true).firstElementChild;
@@ -123,6 +124,7 @@ async function loadDashboard() {
       }),
       document.createTextNode(".")
     );
+    currentMemberIsAdmin = Boolean(member.isAdmin);
     hydrateProfileForm(member);
     await loadSchedule();
 
@@ -130,17 +132,17 @@ async function loadDashboard() {
       myPickPanel?.classList.remove("hidden");
     }
 
-    // Check if user is admin by attempting to access admin endpoint
-    try {
-      await window.filmCrew.fetchJson("/api/members");
+    if (currentMemberIsAdmin) {
       adminPanel.classList.remove("hidden");
-      await populateMemberOptions();
-      await renderAdminProfileEditors();
-      initRefreshAllFilmsButton();
-      await renderRotationAdmin();
-      updateCreateScreeningDefaults(rotationData);
-    } catch {
-      // User is not admin, hide admin panel
+      try {
+        await populateMemberOptions();
+        await renderAdminProfileEditors();
+        initRefreshAllFilmsButton();
+        await renderRotationAdmin();
+        updateCreateScreeningDefaults(rotationData);
+      } catch (error) {
+        console.error(error);
+      }
     }
   } catch {
     const loginLink = window.filmCrew.createEl("a", {
@@ -165,6 +167,11 @@ function hydrateProfileForm(member) {
   emojiInput.value = member.profileEmoji || "🎬";
   validateEmojiInput(emojiInput);
   initColourPicker(dotButton, colourInput, colourInput.value);
+
+  const telegramInput = profileForm.elements.telegramUsername;
+  if (telegramInput) {
+    telegramInput.value = member.telegramUsername || "";
+  }
 }
 
 async function populateMemberOptions() {
@@ -222,7 +229,8 @@ profileForm?.addEventListener("submit", async (event) => {
       method: "PUT",
       body: JSON.stringify({
         profileColor: profileForm.elements.profileColor.value,
-        profileEmoji: profileForm.elements.profileEmoji.value
+        profileEmoji: profileForm.elements.profileEmoji.value,
+        telegramUsername: profileForm.elements.telegramUsername?.value ?? ""
       })
     });
 
@@ -592,6 +600,18 @@ function renderScheduleRows(slots, rotation, suggestion) {
     const dateInput = row.querySelector(".schedule-date-input");
     dateInput.value = slot.watchDate;
 
+    const filmLink = row.querySelector("[data-bind='filmLink']");
+    if (filmLink) {
+      filmLink.textContent = slot.filmTitle || "TBC";
+      if (slot.weekKey) {
+        filmLink.href = `/archive/${slot.weekKey}`;
+      } else {
+        filmLink.textContent = "Suggested Date";
+        filmLink.removeAttribute("href");
+      }
+      filmLink.hidden = false;
+    }
+
     const pickerSelect = row.querySelector(".schedule-picker-select");
     pickerSelect.replaceChildren(...buildPickerOptions(rotation, slot.pickerDisplayName));
 
@@ -613,6 +633,15 @@ function renderScheduleRows(slots, rotation, suggestion) {
       actionBtn.classList.add("hidden");
       dateInput.addEventListener("input", updateSaveVisibility);
       pickerSelect.addEventListener("change", updateSaveVisibility);
+
+      if (currentMemberIsAdmin && slot.weekKey) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "button secondary compact";
+        removeBtn.dataset.action = "remove-slot";
+        removeBtn.textContent = "Remove";
+        row.querySelector(".schedule-row-actions")?.appendChild(removeBtn);
+      }
     }
 
     return row;
@@ -667,5 +696,29 @@ scheduleList?.addEventListener("click", async (event) => {
       btn.disabled = false;
     }
     return;
+  }
+
+  if (action === "remove-slot") {
+    const weekKey = row.dataset.weekKey;
+    if (!weekKey) return;
+
+    const confirmed = window.confirm(`Remove screening ${weekKey}?`);
+    if (!confirmed) return;
+
+    btn.disabled = true;
+    if (scheduleMessage) scheduleMessage.textContent = "Removing…";
+    try {
+      await window.filmCrew.fetchJson(`/api/admin/screenings/${weekKey}`, {
+        method: "DELETE"
+      });
+      const nextSlots = (scheduleData?.slots || []).filter((slot) => slot.weekKey !== weekKey);
+      scheduleData = { ...scheduleData, slots: nextSlots };
+      suggestedSlot = computeSuggestedSlot(scheduleData, nextSlots);
+      renderScheduleRows(nextSlots, rotation, suggestedSlot);
+      if (scheduleMessage) scheduleMessage.textContent = "Removed.";
+    } catch (err) {
+      if (scheduleMessage) scheduleMessage.textContent = err.message || "Could not remove.";
+      btn.disabled = false;
+    }
   }
 });

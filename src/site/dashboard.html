@@ -46,6 +46,10 @@ pageScript: /assets/dashboard.js
         <input type="color" class="native-color-input" name="profileColor" required>
       </div>
     </label>
+    <label>
+      <span>Telegram username <span class="muted">(optional)</span></span>
+      <input type="text" name="telegramUsername" placeholder="e.g. yourname" autocomplete="off">
+    </label>
     <button class="button primary" type="submit">Save profile</button>
   </form>
   <p id="profile-message" class="form-message"></p>
@@ -187,6 +191,7 @@ pageScript: /assets/dashboard.js
 
 <template id="schedule-row-tpl">
   <div class="schedule-row">
+    <a class="schedule-row-film-link" data-bind="filmLink" hidden></a>
     <input type="date" class="schedule-date-input" aria-label="Watch date" required>
     <select class="schedule-picker-select" aria-label="Picker"></select>
     <div class="schedule-row-actions">

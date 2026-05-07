@@ -37,8 +37,6 @@ SELECT
   updated_at
 FROM weekly_screenings_old;
 
-DROP TABLE weekly_screenings_old;
-
 CREATE INDEX IF NOT EXISTS idx_screenings_watch_date ON weekly_screenings(watch_date DESC);
 
 DROP TABLE IF EXISTS screening_schedule;

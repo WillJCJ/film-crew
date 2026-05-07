@@ -109,16 +109,25 @@ function createMemberIdentity(member) {
   return identity;
 }
 
-function renderChooserLine(target, screening) {
+function renderChooserLine(target, screening, options = {}) {
+  const { useForFutureDate = false } = options;
   if (!target) {
     return;
   }
 
   const prefix = document.createTextNode("Chosen by ");
   const chooserNode = createMemberIdentity(screening.chooser || {});
-  const suffix = screening.watchDate
-    ? document.createTextNode(` on ${screening.watchDate}`)
-    : document.createTextNode("");
+  let suffix = document.createTextNode("");
+  if (screening.watchDate) {
+    let preposition = "on";
+    if (useForFutureDate) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (screening.watchDate > today) {
+        preposition = "for";
+      }
+    }
+    suffix = document.createTextNode(` ${preposition} ${screening.watchDate}`);
+  }
 
   target.replaceChildren(prefix, chooserNode, suffix);
 }

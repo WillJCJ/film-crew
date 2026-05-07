@@ -4,6 +4,12 @@ import globals from "globals";
 export default [
   js.configs.recommended,
   {
+    files: ["**/*.js"],
+    rules: {
+      indent: ["error", 2, { SwitchCase: 1 }]
+    }
+  },
+  {
     files: ["src/site/assets/**/*.js"],
     languageOptions: {
       globals: {

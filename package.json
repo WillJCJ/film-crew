@@ -35,6 +35,7 @@
     "wrangler": "^4.15.0"
   },
   "dependencies": {
+    "grammy": "^1.42.0",
     "hono": "^4.12.18"
   }
 }
