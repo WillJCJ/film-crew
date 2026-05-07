@@ -6,6 +6,9 @@ compatibility_date = "2026-05-06"
 # Cloudflare One protects /dashboard/* route.
 # Configure access policies in the Cloudflare dashboard under Zero Trust > Access.
 # The cf-access-jwt-assertion header will be present for authenticated requests.
+# Telegram webhook support requires secrets:
+#   wrangler secret put BOT_TOKEN
+#   wrangler secret put TELEGRAM_WEBHOOK_SECRET
 
 [dev]
 port = 9898

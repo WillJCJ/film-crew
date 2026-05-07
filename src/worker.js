@@ -16,7 +16,7 @@ import { handleGetFilmOmdb, handleRefreshFilmOmdb, handleRefreshAllFilms } from 
 import { handleGetRotation, handleUpdateScreeningDay, handleUpdateRotation } from "./handlers/rotation.js";
 import { handleGetSchedule, handleUpsertScheduleSlot } from "./handlers/schedule.js";
 import { handleGetStats } from "./handlers/stats.js";
-import { toWeekKey } from "./lib/date.js";
+import { handleTelegramWebhook } from "./handlers/telegram.js";
 
 const app = new Hono();
 
@@ -148,100 +148,10 @@ app.post("/api/admin/screenings", async (c) => {
   return handleCreateScreening(c.req.raw, c.env);
 });
 
-// ── Bot API (/api/bot/*) ──────────────────────────────────────────────────────
-// Authenticated via X-Bot-Secret header instead of Cloudflare One.
+// ── Telegram (/api/telegram/*) ───────────────────────────────────────────────
 
-function botAuth(c) {
-  if (c.req.header("X-Bot-Secret") !== c.env.BOT_SECRET) {
-    return c.json({ error: "unauthorized" }, 401);
-  }
-}
-
-// Resolve telegram username → member
-app.get("/api/bot/members/by-telegram/:username", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const row = await c.env.DB.prepare(
-    "SELECT display_name AS displayName, email, is_admin AS isAdmin FROM members WHERE telegram_username = ?"
-  ).bind(c.req.param("username")).first();
-  if (!row) return c.json({ error: "not_found" }, 404);
-  return c.json(row);
-});
-
-// All screenings (reuses existing listScreenings which queries v_screening_summary)
-app.get("/api/bot/screenings", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  return c.json(await listScreenings(c.env.DB));
-});
-
-// Most recent screening
-app.get("/api/bot/screenings/last", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const row = await c.env.DB.prepare(
-      "SELECT weekKey, watchDate, chooserName, guestPickerName, title, averageScore FROM v_screening_summary ORDER BY watchDate DESC LIMIT 1"
-  ).first();
-  return c.json(row ?? null);
-});
-
-// Screenings by picker name
-app.get("/api/bot/screenings/by/:name", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const { results } = await c.env.DB.prepare(
-      "SELECT weekKey, watchDate, chooserName, title, averageScore FROM v_screening_summary WHERE chooserName = ? ORDER BY watchDate DESC"
-  ).bind(c.req.param("name")).all();
-  return c.json(results);
-});
-
-// Create a screening from the bot (minimal film record, no OMDb)
-app.post("/api/bot/screenings", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const { title, display_name, watch_date } = await c.req.json();
-
-  // Find or create a minimal film record
-  let film = await c.env.DB.prepare(
-      "SELECT id FROM films WHERE LOWER(title) = LOWER(?)"
-  ).bind(title).first();
-
-  if (!film) {
-    const result = await c.env.DB.prepare(
-        "INSERT INTO films (title) VALUES (?)"
-    ).bind(title).run();
-    film = { id: result.meta.last_row_id };
-  }
-
-    const weekKey = (watch_date && watch_date !== "TBD")
-      ? toWeekKey(watch_date)
-      : `bot-${Date.now()}`;
-
-  await c.env.DB.prepare(
-      "INSERT INTO weekly_screenings (week_key, watch_date, chooser_member_id, film_id) VALUES (?, ?, ?, ?)"
-  ).bind(weekKey, watch_date === "TBD" ? null : watch_date, display_name, film.id).run();
-
-  return c.json({ week_key: weekKey });
-});
-
-// Submit or update a rating
-app.post("/api/bot/ratings", async (c) => {
-  const err = botAuth(c);
-  if (err) return err;
-  const { week_key, display_name, score } = await c.req.json();
-
-  await c.env.DB.prepare(`
-    INSERT INTO ratings (screening_id, member_id, score)
-    VALUES (?, ?, ?)
-    ON CONFLICT(screening_id, member_id)
-    DO UPDATE SET score = excluded.score, updated_at = CURRENT_TIMESTAMP
-  `).bind(week_key, display_name, score).run();
-
-  const avg = await c.env.DB.prepare(
-      "SELECT ROUND(AVG(score), 2) as avg_score FROM ratings WHERE screening_id = ? AND score IS NOT NULL"
-  ).bind(week_key).first();
-
-  return c.json({ avg_score: avg.avg_score });
+app.post("/api/telegram/webhook", async (c) => {
+  return handleTelegramWebhook(c.req.raw, c.env);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
