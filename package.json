@@ -23,19 +23,19 @@
     "test": "node --test 'worker/tests/**/*.test.js'"
   },
   "devDependencies": {
-    "@11ty/eleventy": "^3.1.2",
+    "@11ty/eleventy": "^3.1.6",
     "@eslint/js": "^10.0.1",
-    "concurrently": "^9.1.2",
-    "eslint": "^10.3.0",
-    "globals": "^17.6.0",
+    "concurrently": "^10.0.3",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
     "htmlhint": "^1.9.2",
-    "markdownlint-cli2": "^0.22.1",
-    "stylelint": "^17.11.0",
+    "markdownlint-cli2": "^0.23.0",
+    "stylelint": "^17.14.0",
     "stylelint-config-standard": "^40.0.0",
-    "wrangler": "^4.15.0"
+    "wrangler": "^4.106.0"
   },
   "dependencies": {
-    "grammy": "^1.42.0",
-    "hono": "^4.12.18"
+    "grammy": "^1.44.0",
+    "hono": "^4.12.27"
   }
 }
